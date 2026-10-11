@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEvents, updateEvent, newGame, newBreak } from '../lib/store.js';
-import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
+import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
 import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.jsx';
 import { navigate } from '../App.jsx';
 
@@ -113,7 +113,9 @@ export default function EventEditor({ id }) {
                   <button className="item__summary" onClick={() => setOpen(isOpen ? null : item.id)} aria-expanded={isOpen}>
                     <strong>{item.name || (isGame ? `Game ${gameNo}` : 'Intermission')}</strong>
                     <span className="muted">
-                      {isGame ? patternName(item) : `${item.minutes} minute break`}
+                      {isGame
+                        ? `${patternName(item)}${item.callLimit?.enabled ? `, ${item.callLimit.count} numbers` : ''}`
+                        : `${item.minutes} minute break`}
                     </span>
                   </button>
                   {isGame && <ColumnChips activeCols={cols} />}
@@ -171,6 +173,8 @@ function GameEditor({ item, event, onChange }) {
         </label>
       </div>
 
+      <CallLimit item={item} poolSize={callPool(variants).length} onChange={onChange} />
+
       <fieldset className="field">
         <legend className="field__label">Ways to win</legend>
         <p className="muted">
@@ -218,6 +222,40 @@ function GameEditor({ item, event, onChange }) {
           ? 'Every column can help win this game, so all 75 numbers can be called.'
           : `${skipped.length > 1 ? `${skipped.slice(0, -1).join(', ')} and ${skipped[skipped.length - 1]}` : skipped[0]} can't help anyone win this game, so ${skipped.length === 1 ? 'that column is' : 'those columns are'} never called. ${cols.length * 15} numbers are in play.`}
       </p>
+    </div>
+  );
+}
+
+function CallLimit({ item, poolSize, onChange }) {
+  const on = !!item.callLimit?.enabled;
+  const count = item.callLimit?.count ?? Math.min(40, poolSize);
+  const set = (patch) => onChange({ callLimit: { enabled: on, count, ...patch } });
+  return (
+    <div className={`limit${on ? ' is-on' : ''}`}>
+      <label className="switch">
+        <input type="checkbox" role="switch" checked={on} onChange={(e) => set({ enabled: e.target.checked })} />
+        <span className="switch__track" aria-hidden />
+        <span>Limit how many numbers are called</span>
+      </label>
+      {on && (
+        <div className="limit__body">
+          <label className="field field--short">
+            <span className="field__label">Numbers to call</span>
+            <input
+              type="number"
+              min={1}
+              max={poolSize}
+              value={count}
+              onChange={(e) => set({ count: Math.max(1, Math.min(75, parseInt(e.target.value, 10) || 1)) })}
+            />
+          </label>
+          <p className="muted">
+            Calling stops after {Math.min(count, poolSize)} {Math.min(count, poolSize) === 1 ? 'number' : 'numbers'}. During the game you can add more
+            to keep going. This game has {poolSize} numbers in play
+            {count > poolSize ? `, so it will stop at ${poolSize}` : ''}.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

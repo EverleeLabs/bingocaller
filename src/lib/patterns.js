@@ -65,15 +65,16 @@ export function togglePatternId(game, id) {
   return [...ids, id];
 }
 
-// "Any 2 from chosen columns": the host picks the columns and how many squares
-// are needed in each. The free space counts as covered in N.
+// "Any 2 in two columns": the host picks exactly two columns. A card wins only
+// with any 2 squares in the first column AND any 2 in the second. The free
+// space counts as covered in N.
 export const COLUMN_PICK = 'col-picks';
 export const DEFAULT_COLUMN_PICK = { cols: [0, 4], count: 2 };
 
 export function columnPickOf(game) {
-  const cp = game.colPick || DEFAULT_COLUMN_PICK;
-  const cols = [...new Set(cp.cols)].filter((c) => c >= 0 && c < 5).sort();
-  return { cols: cols.length ? cols : DEFAULT_COLUMN_PICK.cols, count: Math.min(5, Math.max(1, cp.count || 2)) };
+  const picked = [...new Set(game.colPick?.cols || [])].filter((c) => c >= 0 && c < 5);
+  const cols = picked.length >= 2 ? picked.slice(0, 2) : DEFAULT_COLUMN_PICK.cols;
+  return { cols: cols.sort(), count: 2 };
 }
 
 export function columnPickVariants({ cols, count }) {
@@ -81,11 +82,9 @@ export function columnPickVariants({ cols, count }) {
   return perCol.reduce((acc, options) => acc.flatMap((a) => options.map((o) => [...a, ...o])), [[]]).map((v) => uniq(v));
 }
 
+/** "Any 2 in B and any 2 in O" */
 export function columnPickName({ cols, count }) {
-  const letters = cols.map((c) => LETTERS[c]);
-  const list = letters.length > 1 ? `${letters.slice(0, -1).join(', ')} and ${letters[letters.length - 1]}` : letters[0];
-  if (count === 5) return `Full ${list} ${cols.length > 1 ? 'columns' : 'column'}`;
-  return `Any ${count} in ${list}`;
+  return cols.map((c, i) => `${i === 0 ? 'Any' : 'any'} ${count} in ${LETTERS[c]}`).join(' and ');
 }
 
 function combos(list, k) {
@@ -107,6 +106,15 @@ export function selectedPatterns(game) {
     out.push({ id: 'custom', name: game.customName?.trim() || 'Custom pattern', variants: (game.custom || []).filter((v) => v.length) });
   }
   return out;
+}
+
+/**
+ * The optional cap on how many numbers a game calls: { enabled, count }.
+ * Returns the number to stop at (never more than the numbers in play), or null.
+ */
+export function callLimitFor(game, poolSize, extra = 0) {
+  if (!game?.callLimit?.enabled) return null;
+  return Math.min(poolSize, Math.max(1, (game.callLimit.count || 0) + extra));
 }
 
 /** Every winning shape across all selected patterns, without duplicates. */

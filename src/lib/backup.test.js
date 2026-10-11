@@ -6,13 +6,14 @@ const file = (events, extra = {}) => JSON.stringify({ app: 'bingo-caller', versi
 
 test('reads a valid export', () => {
   const { events } = parseBackup(file([{ id: 'abc', name: 'Friday', interval: 8, items: [
-    { id: 'g1', type: 'game', name: 'Game 1', patternIds: ['corners', 'col-picks'], colPick: { cols: [1, 3] } },
+    { id: 'g1', type: 'game', name: 'Game 1', patternIds: ['corners', 'col-picks'], colPick: { cols: [1, 3] }, callLimit: { enabled: true, count: 35 } },
     { id: 'b1', type: 'break', name: 'Break', minutes: 15, message: 'Snacks' },
   ] }]));
   assert.equal(events[0].name, 'Friday');
   assert.deepEqual(events[0].items[0].patternIds, ['corners', 'col-picks']);
   assert.deepEqual(events[0].items[0].colPick, { cols: [1, 3] });
   assert.equal(events[0].items[1].minutes, 15);
+  assert.deepEqual(events[0].items[0].callLimit, { enabled: true, count: 35 });
 });
 
 test('rejects files that are not exports', () => {

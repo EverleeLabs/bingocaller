@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, presetById, activeColumns, callPool, variantsFor, patternName, togglePatternId, COLUMN_PICK } from './patterns.js';
+import { PRESETS, presetById, activeColumns, callPool, variantsFor, patternName, togglePatternId, COLUMN_PICK, callLimitFor } from './patterns.js';
 
 const cols = (id) => activeColumns(presetById(id).variants).map((c) => 'BINGO'[c]).join('');
 
@@ -78,4 +78,12 @@ test('chosen columns: defaults, ordering and the free space', () => {
   const n = variantsFor({ patternIds: [COLUMN_PICK], colPick: { cols: [2, 3] } });
   assert.ok(n.some((shape) => shape.includes(12))); // free space can be one of the N squares
   assert.deepEqual(activeColumns(n), [2, 3]);
+});
+
+test('call limit: off by default, capped by numbers in play, raised by extras', () => {
+  assert.equal(callLimitFor({}, 75), null);
+  assert.equal(callLimitFor({ callLimit: { enabled: false, count: 30 } }, 75), null);
+  assert.equal(callLimitFor({ callLimit: { enabled: true, count: 30 } }, 75), 30);
+  assert.equal(callLimitFor({ callLimit: { enabled: true, count: 30 } }, 75, 10), 40);
+  assert.equal(callLimitFor({ callLimit: { enabled: true, count: 50 } }, 30), 30); // four corners has 30 in play
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEvents } from '../lib/store.js';
-import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, LETTERS } from '../lib/patterns.js';
+import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, LETTERS } from '../lib/patterns.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
@@ -17,7 +17,7 @@ function freshState(event, index) {
   const item = event.items[index];
   if (!item) return { eventId: event.id, index, phase: 'end', called: [] };
   if (item.type === 'break') return { eventId: event.id, index, phase: 'break', called: [], endsAt: Date.now() + item.minutes * 60000 };
-  return { eventId: event.id, index, phase: 'ready', called: [], interval: null, nextCallAt: null, remaining: null };
+  return { eventId: event.id, index, phase: 'ready', called: [], interval: null, nextCallAt: null, remaining: null, extra: 0 };
 }
 
 function loadRun(event) {
@@ -74,6 +74,9 @@ function CallerInner({ event }) {
   const interval = (run.interval ?? item?.interval ?? event.interval) * 1000;
   const latest = run.called[run.called.length - 1];
   const left = pool.length - run.called.length;
+  // Optional limit on numbers called this game; "extra" is what the caller added during play.
+  const limit = isGame ? callLimitFor(item, pool.length, run.extra || 0) : null;
+  const atLimit = limit != null && run.called.length >= limit;
 
   // Persist the run so a page reload doesn't lose the game.
   useEffect(() => {
@@ -91,17 +94,23 @@ function CallerInner({ event }) {
     if (audio.enabled && isSpeaking() && now < run.nextCallAt + 5000) return;
     setRun((r) => {
       if (r.phase !== 'calling' || Date.now() < r.nextCallAt) return r;
+      if (limit != null && r.called.length >= limit) return { ...r, phase: 'limit', nextCallAt: null };
       const n = drawFrom(pool, r.called);
-      return n == null
-        ? { ...r, phase: 'over', nextCallAt: null }
-        : { ...r, called: [...r.called, n], nextCallAt: Date.now() + interval };
+      if (n == null) return { ...r, phase: 'over', nextCallAt: null };
+      const called = [...r.called, n];
+      // Stop right after the last allowed number.
+      if (limit != null && called.length >= limit) return { ...r, called, phase: 'limit', nextCallAt: null };
+      return { ...r, called, nextCallAt: Date.now() + interval };
     });
-  }, [now, run.phase, run.nextCallAt, pool, interval, audio.enabled]);
+  }, [now, run.phase, run.nextCallAt, pool, interval, audio.enabled, limit]);
 
   // Speak each new number as it's called (not on reload or undo).
   const spokenCount = useRef(run.called.length);
   useEffect(() => {
-    if (run.called.length > spokenCount.current && latest) announceNumber(latest);
+    if (run.called.length > spokenCount.current && latest) {
+      const reached = limit != null && run.called.length === limit && audio.announce;
+      announceNumber(latest, undefined, reached ? `That's ${limit} numbers.` : '');
+    }
     spokenCount.current = run.called.length;
   }, [run.called.length, latest]);
 
@@ -131,6 +140,7 @@ function CallerInner({ event }) {
     activeCols: cols,
     called: run.called,
     nextCallAt: run.phase === 'calling' ? run.nextCallAt : null,
+    limit,
     interval,
     endsAt: run.endsAt ?? null,
     message: item?.type === 'break' ? item.message : '',
@@ -154,13 +164,34 @@ function CallerInner({ event }) {
   const pause = () => setRun((r) => ({ ...r, phase: 'paused', remaining: Math.max(0, r.nextCallAt - Date.now()) }));
   const resume = () => unlockAudio() || setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + Math.min(r.remaining ?? interval, interval) }));
   const bingo = () => (audio.announce && say('Bingo! Please hold your cards while we check.'), setRun((r) => ({ ...r, phase: 'bingo', remaining: r.nextCallAt ? Math.max(0, r.nextCallAt - Date.now()) : null })));
-  const falseAlarm = () => (audio.announce && say("That's not a bingo. We'll keep going."), setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + interval + 2500 })));
+  const falseAlarm = () => {
+    if (atLimit) {
+      if (audio.announce) say("That's not a bingo.");
+      setRun((r) => ({ ...r, phase: 'limit', nextCallAt: null }));
+      return;
+    }
+    if (audio.announce) say("That's not a bingo. We'll keep going.");
+    setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + interval + 2500 }));
+  };
+  /** Raise the limit by n. If calling had stopped at the limit, carry on. */
+  const addMore = (n) => {
+    if (!Number.isFinite(n) || n < 1) return;
+    unlockAudio();
+    const resumeNow = run.phase === 'limit';
+    if (resumeNow && audio.announce) say(`${n} more ${n === 1 ? 'number' : 'numbers'}. Here we go.`);
+    setRun((r) => ({
+      ...r,
+      extra: (r.extra || 0) + n,
+      ...(r.phase === 'limit' ? { phase: 'calling', nextCallAt: Date.now() + (audio.announce ? 2500 : 1200) } : {}),
+    }));
+  };
+  const [customMore, setCustomMore] = useState('');
   const confirmWin = (announce = true) => {
     if (announce && audio.announce) say('We have a winner! Congratulations.');
     setRun((r) => ({ ...r, phase: 'over', nextCallAt: null }));
   };
   const sayAgain = () => latest && announceNumber(latest);
-  const undo = () => setRun((r) => ({ ...r, called: r.called.slice(0, -1) }));
+  const undo = () => setRun((r) => ({ ...r, called: r.called.slice(0, -1), phase: r.phase === 'limit' ? 'paused' : r.phase, remaining: r.phase === 'limit' ? interval : r.remaining }));
   const setSpeed = (sec) => setRun((r) => ({ ...r, interval: sec, nextCallAt: r.phase === 'calling' ? Math.min(r.nextCallAt, Date.now() + sec * 1000) : r.nextCallAt }));
   const goTo = (index) => {
     const inProgress = isGame && run.called.length > 0 && run.phase !== 'over';
@@ -263,16 +294,25 @@ function CallerInner({ event }) {
                   {run.phase === 'paused' && 'Paused'}
                   {run.phase === 'bingo' && 'Bingo called. Check the card against the board.'}
                   {run.phase === 'over' && (left === 0 ? 'Every number in play has been called.' : 'Game over.')}
+                  {run.phase === 'limit' && `That's all ${limit} numbers.`}
                 </p>
                 <p className="muted">
-                  {run.called.length} called, {left} left in play
+                  {limit != null
+                    ? `${run.called.length} of ${limit} called${(run.extra || 0) > 0 ? ` (${run.extra} added)` : ''}, ${left} left in play`
+                    : `${run.called.length} called, ${left} left in play`}
                 </p>
 
                 <div className="row">
                   {run.phase === 'ready' && <button className="btn btn--primary btn--big" onClick={start} disabled={!pool.length}>Start calling</button>}
                   {run.phase === 'calling' && <button className="btn btn--big" onClick={pause}>Pause</button>}
                   {run.phase === 'paused' && <button className="btn btn--primary btn--big" onClick={resume}>Resume calling</button>}
-                  {(run.phase === 'calling' || run.phase === 'paused') && (
+                  {run.phase === 'limit' && left > 0 && (
+                    <>
+                      <button className="btn btn--primary btn--big" onClick={() => addMore(5)}>Add 5 more</button>
+                      <button className="btn btn--big" onClick={() => addMore(10)}>Add 10 more</button>
+                    </>
+                  )}
+                  {(run.phase === 'calling' || run.phase === 'paused' || run.phase === 'limit') && (
                     <button className="btn btn--bingo btn--big" onClick={bingo}>Bingo!</button>
                   )}
                   {run.phase === 'bingo' && (
@@ -310,6 +350,35 @@ function CallerInner({ event }) {
                     <button className="btn btn--quiet" onClick={() => confirm('End this game now?') && confirmWin(false)}>End game</button>
                   )}
                 </div>
+
+                {limit != null && run.phase !== 'over' && left > 0 && (
+                  <form
+                    className="row more"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      addMore(parseInt(customMore, 10));
+                      setCustomMore('');
+                    }}
+                  >
+                    <span className="more__label">{run.phase === 'limit' ? 'Or add' : 'Add more numbers'}</span>
+                    {run.phase !== 'limit' && (
+                      <>
+                        <button type="button" className="btn btn--quiet" onClick={() => addMore(5)}>+5</button>
+                        <button type="button" className="btn btn--quiet" onClick={() => addMore(10)}>+10</button>
+                      </>
+                    )}
+                    <input
+                      type="number"
+                      min={1}
+                      max={left}
+                      value={customMore}
+                      onChange={(e) => setCustomMore(e.target.value)}
+                      placeholder="How many"
+                      aria-label="How many more numbers"
+                    />
+                    <button type="submit" className="btn" disabled={!(parseInt(customMore, 10) > 0)}>Add</button>
+                  </form>
+                )}
               </div>
             </div>
 

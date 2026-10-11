@@ -52,7 +52,9 @@ function GameScreen({ s, now }) {
         <span className="tv__event">{s.eventName}</span>
         <h1 className="tv__title">{s.title}</h1>
         <span className="tv__count">
-          {s.called.length} {s.called.length === 1 ? 'number' : 'numbers'} called
+          {s.limit != null
+            ? `${s.called.length} of ${s.limit} numbers called`
+            : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called`}
         </span>
       </header>
 
@@ -64,6 +66,7 @@ function GameScreen({ s, now }) {
         {s.phase === 'paused' && <p className="tv__note">Paused</p>}
         {s.phase === 'ready' && <p className="tv__note">Get your cards ready</p>}
         {s.phase === 'over' && <p className="tv__note">Game over</p>}
+        {s.phase === 'limit' && <p className="tv__note">That's all {s.limit} numbers</p>}
         {s.phase === 'calling' && s.nextCallAt && (
           <Progress remaining={s.nextCallAt - now} total={s.interval} />
         )}

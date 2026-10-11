@@ -97,10 +97,11 @@ export function say(text, s = settings) {
   speechSynthesis.resume();
 }
 
-export async function announceNumber(n, s = settings) {
+/** Speak a call. `after` is extra text read straight after it (e.g. "That's 50 numbers."). */
+export async function announceNumber(n, s = settings, after = '') {
   if (!s.enabled) return;
   if (s.chime) await chime(s.volume);
-  say(callWords(n, s), s);
+  say(`${callWords(n, s)}${after ? ` ... ${after}` : ''}`, s);
 }
 
 let ctx;
