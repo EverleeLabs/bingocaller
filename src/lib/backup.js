@@ -89,7 +89,13 @@ function cleanItem(raw) {
       game.colPick = { cols: raw.colPick.cols.filter((c) => Number.isInteger(c) && c >= 0 && c < 5).slice(0, 2) };
     }
     if (raw.callLimit && typeof raw.callLimit === 'object') {
-      game.callLimit = { enabled: raw.callLimit.enabled === true, count: num(raw.callLimit.count, 1, 75, 40) };
+      game.callLimit = {
+        enabled: raw.callLimit.enabled === true,
+        count: num(raw.callLimit.count, 1, 75, 40),
+        announceAt: Array.isArray(raw.callLimit.announceAt)
+          ? [...new Set(raw.callLimit.announceAt.filter((n) => Number.isInteger(n) && n >= 1 && n <= 75))].sort((a, b) => a - b)
+          : [],
+      };
     }
     if (!game.patternIds.length) game.patternIds = ['any-line'];
     return game;

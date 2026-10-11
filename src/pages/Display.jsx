@@ -67,6 +67,12 @@ function GameScreen({ s, now }) {
         {s.phase === 'ready' && <p className="tv__note">Get your cards ready</p>}
         {s.phase === 'over' && <p className="tv__note">Game over</p>}
         {s.phase === 'limit' && <p className="tv__note">That's all {s.limit} numbers</p>}
+        {s.phase === 'prize' && (
+          <div className="tv__prize" role="status">
+            <p className="tv__alert">Special prize!</p>
+            {s.prizeMessage && <p className="tv__prize-message">{s.prizeMessage}</p>}
+          </div>
+        )}
         {s.phase === 'calling' && s.nextCallAt && (
           <Progress remaining={s.nextCallAt - now} total={s.interval} />
         )}

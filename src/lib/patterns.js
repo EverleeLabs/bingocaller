@@ -117,6 +117,23 @@ export function callLimitFor(game, poolSize, extra = 0) {
   return Math.min(poolSize, Math.max(1, (game.callLimit.count || 0) + extra));
 }
 
+/** "30, 40 45" -> [30, 40, 45]: whole numbers 1–75, sorted, no repeats. */
+export function parseAnnounceList(text) {
+  const nums = String(text).match(/\d+/g) || [];
+  return [...new Set(nums.map(Number).filter((n) => n >= 1 && n <= 75))].sort((a, b) => a - b);
+}
+
+/** The milestone announcement for the Nth call: "That's 40 numbers called. 10 to go." */
+export function milestoneText(count, limit) {
+  const left = limit != null ? limit - count : 0;
+  return `That's ${count} ${count === 1 ? 'number' : 'numbers'} called.${left > 0 ? ` ${left} to go.` : ''}`;
+}
+
+/** Should the Nth call get a milestone announcement in this game? */
+export function isMilestone(game, count) {
+  return !!game?.callLimit?.enabled && (game.callLimit.announceAt || []).includes(count);
+}
+
 /** Every winning shape across all selected patterns, without duplicates. */
 export function variantsFor(game) {
   const seen = new Set();

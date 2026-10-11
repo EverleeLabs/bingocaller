@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEvents } from '../lib/store.js';
-import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, LETTERS } from '../lib/patterns.js';
+import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, isMilestone, milestoneText, LETTERS } from '../lib/patterns.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
@@ -8,6 +8,20 @@ import AudioControls from '../components/AudioControls.jsx';
 import TvHelp from '../components/TvHelp.jsx';
 
 const RUN_KEY = 'bingo.run.v1';
+
+// Special prize: when switched on for the current game and this number is
+// called, calling pauses and the announcement below is read out and shown.
+const PRIZE_NUMBER = 69; // O 69
+const PRIZE_KEY = 'bingo.prize.v1';
+const DEFAULT_PRIZE_MESSAGE = 'Special prize! Check your cards for O 69.';
+
+function loadPrizeMessage() {
+  try {
+    return localStorage.getItem(PRIZE_KEY) || DEFAULT_PRIZE_MESSAGE;
+  } catch {
+    return DEFAULT_PRIZE_MESSAGE;
+  }
+}
 
 // phase for a game: ready → calling ⇄ paused → bingo (checking a card) → over
 // phase for an intermission: break
@@ -77,6 +91,17 @@ function CallerInner({ event }) {
   // Optional limit on numbers called this game; "extra" is what the caller added during play.
   const limit = isGame ? callLimitFor(item, pool.length, run.extra || 0) : null;
   const atLimit = limit != null && run.called.length >= limit;
+  // The O 69 prize is only offered when O numbers can be called this game.
+  const prizeAvailable = isGame && pool.includes(PRIZE_NUMBER);
+  const prizeOn = prizeAvailable && !!run.prizeOn;
+  const [prizeMessage, setPrizeMessage] = useState(loadPrizeMessage);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PRIZE_KEY, prizeMessage);
+    } catch {
+      /* ignore */
+    }
+  }, [prizeMessage]);
 
   // Persist the run so a page reload doesn't lose the game.
   useEffect(() => {
@@ -87,29 +112,37 @@ function CallerInner({ event }) {
     }
   }, [run]);
 
+  /** Draw one number. Used by the auto-caller and by "Call next now". */
+  function drawNext(r) {
+    if (limit != null && r.called.length >= limit) return { ...r, phase: 'limit', nextCallAt: null };
+    const n = drawFrom(pool, r.called);
+    if (n == null) return { ...r, phase: 'over', nextCallAt: null };
+    const called = [...r.called, n];
+    // Special prize number: stop so the prize can be announced.
+    if (prizeOn && n === PRIZE_NUMBER) return { ...r, called, phase: 'prize', nextCallAt: null };
+    // Stop right after the last allowed number.
+    if (limit != null && called.length >= limit) return { ...r, called, phase: 'limit', nextCallAt: null };
+    return { ...r, called, nextCallAt: r.phase === 'calling' ? Date.now() + interval : null };
+  }
+
   // The auto-caller.
   useEffect(() => {
     if (run.phase !== 'calling' || now < run.nextCallAt) return;
     // Let the voice finish the previous call before drawing the next one.
     if (audio.enabled && isSpeaking() && now < run.nextCallAt + 5000) return;
-    setRun((r) => {
-      if (r.phase !== 'calling' || Date.now() < r.nextCallAt) return r;
-      if (limit != null && r.called.length >= limit) return { ...r, phase: 'limit', nextCallAt: null };
-      const n = drawFrom(pool, r.called);
-      if (n == null) return { ...r, phase: 'over', nextCallAt: null };
-      const called = [...r.called, n];
-      // Stop right after the last allowed number.
-      if (limit != null && called.length >= limit) return { ...r, called, phase: 'limit', nextCallAt: null };
-      return { ...r, called, nextCallAt: Date.now() + interval };
-    });
-  }, [now, run.phase, run.nextCallAt, pool, interval, audio.enabled, limit]);
+    setRun((r) => (r.phase !== 'calling' || Date.now() < r.nextCallAt ? r : drawNext(r)));
+  }, [now, run.phase, run.nextCallAt, pool, interval, audio.enabled, limit, prizeOn]);
 
   // Speak each new number as it's called (not on reload or undo).
   const spokenCount = useRef(run.called.length);
   useEffect(() => {
     if (run.called.length > spokenCount.current && latest) {
       const reached = limit != null && run.called.length === limit && audio.announce;
-      announceNumber(latest, undefined, reached ? `That's ${limit} numbers.` : '');
+      const prize = prizeOn && latest === PRIZE_NUMBER;
+      // A milestone the host asked for ("That's 40 numbers called. 10 to go."), unless it's the final number.
+      const milestone = audio.announce && !reached && isMilestone(item, run.called.length) ? milestoneText(run.called.length, limit) : '';
+      const after = [prize ? prizeMessage : '', milestone, reached ? `That's ${limit} numbers.` : ''].filter(Boolean).join(' ... ');
+      announceNumber(latest, undefined, after);
     }
     spokenCount.current = run.called.length;
   }, [run.called.length, latest]);
@@ -141,6 +174,7 @@ function CallerInner({ event }) {
     called: run.called,
     nextCallAt: run.phase === 'calling' ? run.nextCallAt : null,
     limit,
+    prizeMessage: run.phase === 'prize' ? prizeMessage : null,
     interval,
     endsAt: run.endsAt ?? null,
     message: item?.type === 'break' ? item.message : '',
@@ -190,8 +224,22 @@ function CallerInner({ event }) {
     if (announce && audio.announce) say('We have a winner! Congratulations.');
     setRun((r) => ({ ...r, phase: 'over', nextCallAt: null }));
   };
-  const sayAgain = () => latest && announceNumber(latest);
-  const undo = () => setRun((r) => ({ ...r, called: r.called.slice(0, -1), phase: r.phase === 'limit' ? 'paused' : r.phase, remaining: r.phase === 'limit' ? interval : r.remaining }));
+  const sayAgain = () => latest && announceNumber(latest, undefined, run.phase === 'prize' ? prizeMessage : '');
+  /** Call the next number straight away. While paused (or before starting) it steps one number at a time. */
+  const callNow = () => {
+    unlockAudio();
+    stopSpeaking();
+    setRun((r) => {
+      if (!['ready', 'calling', 'paused'].includes(r.phase)) return r;
+      return drawNext(r.phase === 'ready' ? { ...r, phase: 'paused', remaining: null } : r);
+    });
+  };
+  const togglePrize = (on) => setRun((r) => ({ ...r, prizeOn: on }));
+  const resumeAfterPrize = () => {
+    unlockAudio();
+    setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + 1500 }));
+  };
+  const undo = () => setRun((r) => ({ ...r, called: r.called.slice(0, -1), phase: r.phase === 'limit' || r.phase === 'prize' ? 'paused' : r.phase, remaining: r.phase === 'limit' || r.phase === 'prize' ? interval : r.remaining }));
   const setSpeed = (sec) => setRun((r) => ({ ...r, interval: sec, nextCallAt: r.phase === 'calling' ? Math.min(r.nextCallAt, Date.now() + sec * 1000) : r.nextCallAt }));
   const goTo = (index) => {
     const inProgress = isGame && run.called.length > 0 && run.phase !== 'over';
@@ -202,15 +250,22 @@ function CallerInner({ event }) {
 
   // Space bar pauses and resumes.
   const keyRef = useRef();
-  keyRef.current = { phase: run.phase, start, pause, resume };
+  keyRef.current = { phase: run.phase, start, pause, resume, resumeAfterPrize, callNow };
   useEffect(() => {
     const onKey = (e) => {
-      if (e.code !== 'Space' || /INPUT|TEXTAREA|BUTTON|SELECT/.test(e.target.tagName)) return;
-      e.preventDefault();
+      if (/INPUT|TEXTAREA|SELECT/.test(e.target.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = keyRef.current;
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        k.callNow();
+        return;
+      }
+      if (e.code !== 'Space' || e.target.tagName === 'BUTTON') return;
+      e.preventDefault();
       if (k.phase === 'calling') k.pause();
       else if (k.phase === 'paused') k.resume();
       else if (k.phase === 'ready') k.start();
+      else if (k.phase === 'prize') k.resumeAfterPrize();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -307,7 +362,9 @@ function CallerInner({ event }) {
                   {run.phase === 'bingo' && 'Bingo called. Check the card against the board.'}
                   {run.phase === 'over' && (left === 0 ? 'Every number in play has been called.' : 'Game over.')}
                   {run.phase === 'limit' && `That's all ${limit} numbers.`}
+                  {run.phase === 'prize' && 'O 69: special prize!'}
                 </p>
+                {run.phase === 'prize' && <p className="prize-banner">{prizeMessage}</p>}
                 <p className="muted">
                   {limit != null
                     ? `${run.called.length} of ${limit} called${(run.extra || 0) > 0 ? ` (${run.extra} added)` : ''}, ${left} left in play`
@@ -318,13 +375,14 @@ function CallerInner({ event }) {
                   {run.phase === 'ready' && <button className="btn btn--primary btn--big" onClick={start} disabled={!pool.length}>Start calling</button>}
                   {run.phase === 'calling' && <button className="btn btn--big" onClick={pause}>Pause</button>}
                   {run.phase === 'paused' && <button className="btn btn--primary btn--big" onClick={resume}>Resume calling</button>}
+                  {run.phase === 'prize' && <button className="btn btn--primary btn--big" onClick={resumeAfterPrize}>Resume calling</button>}
                   {run.phase === 'limit' && left > 0 && (
                     <>
                       <button className="btn btn--primary btn--big" onClick={() => addMore(5)}>Add 5 more</button>
                       <button className="btn btn--big" onClick={() => addMore(10)}>Add 10 more</button>
                     </>
                   )}
-                  {(run.phase === 'calling' || run.phase === 'paused' || run.phase === 'limit') && (
+                  {(run.phase === 'calling' || run.phase === 'paused' || run.phase === 'limit' || run.phase === 'prize') && (
                     <button className="btn btn--bingo btn--big" onClick={bingo}>Bingo!</button>
                   )}
                   {run.phase === 'bingo' && (
@@ -340,18 +398,43 @@ function CallerInner({ event }) {
                   )}
                 </div>
 
+                {/* Hidden once O 69 has been called and the game has moved on. */}
+                {prizeAvailable && run.phase !== 'over' && (!run.called.includes(PRIZE_NUMBER) || run.phase === 'prize') && (
+                  <div className={`prize${prizeOn ? ' is-on' : ''}`}>
+                    <label className="switch">
+                      <input type="checkbox" role="switch" checked={prizeOn} onChange={(e) => togglePrize(e.target.checked)} />
+                      <span className="switch__track" aria-hidden />
+                      <span>Special prize on O 69</span>
+                    </label>
+                    {prizeOn && (
+                      <>
+                        <label className="prize__message">
+                          <span className="field__label">Announcement</span>
+                          <input value={prizeMessage} onChange={(e) => setPrizeMessage(e.target.value)} placeholder={DEFAULT_PRIZE_MESSAGE} />
+                        </label>
+                        {run.phase !== 'prize' && (
+                          <p className="muted">When O 69 is called, calling pauses and this is read out and shown on the TV.</p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className="row console__minor">
                   <label className="speed">
                     <span>Every {Math.round(interval / 1000)}s</span>
                     <input
                       type="range"
-                      min={3}
+                      min={1}
                       max={30}
                       value={Math.round(interval / 1000)}
                       onChange={(e) => setSpeed(Number(e.target.value))}
                       aria-label="Seconds between calls"
                     />
                   </label>
+                  {['ready', 'calling', 'paused'].includes(run.phase) && left > 0 && (
+                    <button className="btn btn--quiet" onClick={callNow} title="Shortcut: N">Call next now</button>
+                  )}
                   {run.called.length > 0 && run.phase !== 'over' && (
                     <button className="btn btn--quiet" onClick={sayAgain} disabled={!audio.enabled}>Say it again</button>
                   )}

@@ -521,3 +521,18 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .console__recent-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .console__recent-balls { display: flex; gap: 6px; }
 .console__recent .ball { --size: 50px; }
+
+/* ---------- Special prize (O 69) ---------- */
+.prize { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--r-md); border: 1.5px dashed #e7b45c; }
+.prize.is-on { border-style: solid; background: #fff6e3; }
+.prize__message { display: flex; flex-direction: column; gap: 4px; }
+.prize__message input { min-height: 40px; padding: 6px 10px; border: 1.5px solid var(--line); border-radius: var(--r-sm); background: var(--surface); font: inherit; }
+.prize-banner { padding: 10px 14px; border-radius: var(--r-sm); background: var(--o); color: var(--ink); font-weight: 800; font-size: 1.125rem; }
+.tv__prize { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; text-align: center; }
+.tv__prize-message { font-size: 3.4vh; font-weight: 700; max-width: 28vw; line-height: 1.2; }
+
+/* Milestone announcements (inside the number limit setting) */
+.milestones { flex-basis: 100%; display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
+.milestones .field input { min-height: 44px; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: var(--r-sm); background: var(--surface); max-width: 320px; }
+.milestones__quick { gap: 4px; }
+.milestones__quick .btn { min-height: 34px; padding: 4px 12px; font-size: 0.875rem; }

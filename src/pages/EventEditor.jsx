@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEvents, updateEvent, newGame, newBreak } from '../lib/store.js';
-import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
+import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, parseAnnounceList, milestoneText, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
 import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.jsx';
 import { navigate } from '../App.jsx';
 
@@ -108,7 +108,7 @@ export default function EventEditor({ id }) {
                     <strong>{item.name || (isGame ? `Game ${gameNo}` : 'Intermission')}</strong>
                     <span className="muted">
                       {isGame
-                        ? `${patternName(item)}${item.callLimit?.enabled ? `, ${item.callLimit.count} numbers` : ''}`
+                        ? `${patternName(item)}${item.callLimit?.enabled ? `, ${item.callLimit.count} numbers${item.callLimit.announceAt?.length ? `, announced at ${item.callLimit.announceAt.join(', ')}` : ''}` : ''}`
                         : `${item.minutes} minute break`}
                     </span>
                   </button>
@@ -223,7 +223,13 @@ function GameEditor({ item, event, onChange }) {
 function CallLimit({ item, poolSize, onChange }) {
   const on = !!item.callLimit?.enabled;
   const count = item.callLimit?.count ?? Math.min(40, poolSize);
-  const set = (patch) => onChange({ callLimit: { enabled: on, count, ...patch } });
+  const announceAt = item.callLimit?.announceAt || [];
+  const set = (patch) => onChange({ callLimit: { enabled: on, count, announceAt, ...patch } });
+  const [draft, setDraft] = useState(null); // text while typing in the Announce at box
+  const listText = announceAt.join(', ');
+  const stopAt = Math.min(count, poolSize);
+  const every10 = Array.from({ length: Math.floor((stopAt - 1) / 10) }, (_, i) => (i + 1) * 10);
+  const last5 = Array.from({ length: 5 }, (_, i) => stopAt - 5 + i).filter((n) => n >= 1);
   return (
     <div className={`limit${on ? ' is-on' : ''}`}>
       <label className="switch">
@@ -242,6 +248,42 @@ function CallLimit({ item, poolSize, onChange }) {
             to keep going. This game has {poolSize} numbers in play
             {count > poolSize ? `, so it will stop at ${poolSize}` : ''}.
           </p>
+          <div className="milestones">
+            <label className="field">
+              <span className="field__label">Announce at (optional)</span>
+              <input
+                value={draft ?? listText}
+                inputMode="numeric"
+                placeholder="e.g. 30, 40, 45"
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  set({ announceAt: parseAnnounceList(e.target.value) });
+                }}
+                onBlur={() => setDraft(null)}
+              />
+            </label>
+            <div className="row milestones__quick">
+              {every10.length > 0 && (
+                <button type="button" className="btn btn--quiet" onClick={() => set({ announceAt: every10 })}>
+                  Every 10
+                </button>
+              )}
+              <button type="button" className="btn btn--quiet" onClick={() => set({ announceAt: last5 })}>
+                Each of the last 5
+              </button>
+              {announceAt.length > 0 && (
+                <button type="button" className="btn btn--quiet" onClick={() => set({ announceAt: [] })}>
+                  Clear
+                </button>
+              )}
+            </div>
+            <p className="muted">
+              {announceAt.length === 0
+                ? 'List call numbers to announce, separated by commas. For example, at 40 the caller adds: “' + milestoneText(40, Math.max(stopAt, 41)) + '”'
+                : `After ${announceAt.length === 1 ? 'call' : 'calls'} ${announceAt.length > 1 ? `${announceAt.slice(0, -1).join(', ')} and ${announceAt[announceAt.length - 1]}` : announceAt[0]} the caller adds, for example: “${milestoneText(announceAt[0], stopAt)}”`}
+              {announceAt.some((n) => n >= stopAt) && ` Numbers at or past ${stopAt} are covered by the end-of-numbers announcement.`}
+            </p>
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, presetById, activeColumns, callPool, variantsFor, patternName, togglePatternId, COLUMN_PICK, callLimitFor } from './patterns.js';
+import { PRESETS, presetById, activeColumns, callPool, variantsFor, patternName, togglePatternId, COLUMN_PICK, callLimitFor, parseAnnounceList, milestoneText, isMilestone } from './patterns.js';
 
 const cols = (id) => activeColumns(presetById(id).variants).map((c) => 'BINGO'[c]).join('');
 
@@ -86,4 +86,14 @@ test('call limit: off by default, capped by numbers in play, raised by extras', 
   assert.equal(callLimitFor({ callLimit: { enabled: true, count: 30 } }, 75), 30);
   assert.equal(callLimitFor({ callLimit: { enabled: true, count: 30 } }, 75, 10), 40);
   assert.equal(callLimitFor({ callLimit: { enabled: true, count: 50 } }, 30), 30); // four corners has 30 in play
+});
+
+test('milestone announcements', () => {
+  assert.deepEqual(parseAnnounceList('40, 30 45,,45 and 99 0'), [30, 40, 45]);
+  assert.equal(milestoneText(40, 50), "That's 40 numbers called. 10 to go.");
+  assert.equal(milestoneText(50, 50), "That's 50 numbers called.");
+  const game = { callLimit: { enabled: true, count: 50, announceAt: [30, 40] } };
+  assert.equal(isMilestone(game, 40), true);
+  assert.equal(isMilestone(game, 41), false);
+  assert.equal(isMilestone({ callLimit: { enabled: false, count: 50, announceAt: [40] } }, 40), false);
 });
