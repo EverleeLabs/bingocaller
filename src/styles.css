@@ -514,3 +514,10 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 @media (max-width: 860px) {
   .audio__panel, .tvhelp { position: fixed; top: 112px; left: 16px; right: 16px; width: auto; max-height: calc(100vh - 128px); }
 }
+
+/* Previous calls under the current ball (caller screen) */
+.console__balls { display: flex; flex-direction: column; align-items: center; gap: 12px; flex-shrink: 0; }
+.console__recent { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.console__recent-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.console__recent-balls { display: flex; gap: 6px; }
+.console__recent .ball { --size: 50px; }

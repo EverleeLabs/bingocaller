@@ -286,7 +286,19 @@ function CallerInner({ event }) {
             )}
 
             <div className="console">
-              <Ball n={latest} size="lg" />
+              <div className="console__balls">
+                <Ball n={latest} size="lg" />
+                {run.called.length > 1 && (
+                  <div className="console__recent">
+                    <span className="console__recent-label">Before that</span>
+                    <div className="console__recent-balls">
+                      {run.called.slice(-4, -1).reverse().map((n) => (
+                        <Ball key={n} n={n} size="sm" />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <div className="console__status">
                 <p className="console__line">
                   {run.phase === 'ready' && 'Ready when you are.'}
