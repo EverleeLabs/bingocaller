@@ -502,3 +502,15 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .more { gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .more__label { font-size: 0.875rem; font-weight: 600; margin-right: 4px; }
 .more input { width: 110px; min-height: 40px; padding: 6px 10px; border: 1.5px solid var(--line); border-radius: var(--r-sm); }
+.tvhelp { width: 460px; }
+.tvhelp__note { font-size: 0.875rem; padding: 8px 12px; background: var(--paper); border-radius: var(--r-sm); line-height: 1.4; }
+.tvhelp__link { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding: 4px 4px 4px 10px; border: 1.5px solid var(--line); border-radius: var(--r-sm); }
+.tvhelp__link code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 0.8125rem; user-select: all; }
+.tvhelp__link .btn { min-height: 32px; padding: 4px 10px; }
+@media (max-width: 860px) { .tvhelp { width: min(460px, calc(100vw - 32px)); } }
+
+/* Popovers stay on screen: scroll inside on short screens, pin to the viewport on narrow ones */
+.audio__panel { max-height: calc(100vh - 96px); overflow-y: auto; }
+@media (max-width: 860px) {
+  .audio__panel, .tvhelp { position: fixed; top: 112px; left: 16px; right: 16px; width: auto; max-height: calc(100vh - 128px); }
+}

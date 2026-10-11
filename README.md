@@ -29,6 +29,7 @@ The caller screen has a **Show on a TV** button with these steps built in.
    - **AirPlay (Mac + Apple TV or AirPlay TV)**: Control Center → Screen Mirroring → choose the TV → **Use as separate display**. Drag the display window onto the TV and click **Full screen**.
    - **HDMI**: plug in, then drag the window over and click **Full screen**.
    - **Chromecast**: in the board window, Chrome ⋮ menu → Cast → Cast tab.
+   - **iPad with an M-series chip** (iPad Air 5th gen or later, iPad Pro M1 or later): turn on Stage Manager, connect with a USB-C to HDMI adapter, open a second Safari window on the TV screen at `…/#/display`, and run the game from the iPad window. iPhones and older iPads can only mirror.
    - For calls through the TV speakers, set the Mac's sound output to the TV (Control Center → Sound).
 3. Keep calling from the laptop screen. The TV follows along instantly.
 

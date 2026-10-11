@@ -49,13 +49,7 @@ export default function EventEditor({ id }) {
         </label>
         <label className="field field--short">
           <span className="field__label">Seconds between calls</span>
-          <input
-            type="number"
-            min={2}
-            max={60}
-            value={event.interval}
-            onChange={(e) => set({ interval: clampInt(e.target.value, 2, 60, 8) })}
-          />
+          <NumberInput min={2} max={60} value={event.interval} onCommit={(n) => set({ interval: n })} />
         </label>
         <button className="btn btn--primary" onClick={() => navigate(`/run/${id}`)} disabled={!event.items.length}>
           Run event
@@ -162,13 +156,13 @@ function GameEditor({ item, event, onChange }) {
         </label>
         <label className="field field--short">
           <span className="field__label">Seconds between calls</span>
-          <input
-            type="number"
+          <NumberInput
             min={2}
             max={60}
+            allowEmpty
             placeholder={`${event.interval} (event default)`}
-            value={item.interval ?? ''}
-            onChange={(e) => onChange({ interval: e.target.value === '' ? null : clampInt(e.target.value, 2, 60, event.interval) })}
+            value={item.interval}
+            onCommit={(n) => onChange({ interval: n })}
           />
         </label>
       </div>
@@ -241,13 +235,7 @@ function CallLimit({ item, poolSize, onChange }) {
         <div className="limit__body">
           <label className="field field--short">
             <span className="field__label">Numbers to call</span>
-            <input
-              type="number"
-              min={1}
-              max={poolSize}
-              value={count}
-              onChange={(e) => set({ count: Math.max(1, Math.min(75, parseInt(e.target.value, 10) || 1)) })}
-            />
+            <NumberInput min={1} max={75} value={count} onCommit={(n) => set({ count: n })} />
           </label>
           <p className="muted">
             Calling stops after {Math.min(count, poolSize)} {Math.min(count, poolSize) === 1 ? 'number' : 'numbers'}. During the game you can add more
@@ -380,7 +368,7 @@ function BreakEditor({ item, onChange }) {
         </label>
         <label className="field field--short">
           <span className="field__label">Length in minutes</span>
-          <input type="number" min={1} max={120} value={item.minutes} onChange={(e) => onChange({ minutes: clampInt(e.target.value, 1, 120, 10) })} />
+          <NumberInput min={1} max={120} value={item.minutes} onCommit={(n) => onChange({ minutes: n })} />
         </label>
       </div>
       <label className="field">
@@ -402,8 +390,49 @@ function Missing() {
   );
 }
 
-function clampInt(v, min, max, fallback) {
-  const n = parseInt(v, 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.min(max, Math.max(min, n));
+/**
+ * A number box you can type into freely. While typing, valid numbers are saved
+ * as you go; when you leave the box, an out-of-range entry is pulled into
+ * range and an empty one is cleared (allowEmpty) or goes back to what it was.
+ */
+function NumberInput({ value, min, max, onCommit, allowEmpty = false, placeholder }) {
+  const [draft, setDraft] = useState(null); // text while editing, null otherwise
+  const [before, setBefore] = useState(value); // value when editing started
+  const shown = draft ?? (value ?? '');
+  const inRange = (n) => Number.isInteger(n) && n >= min && n <= max;
+
+  const onChange = (e) => {
+    const text = e.target.value;
+    setDraft(text);
+    const n = parseInt(text, 10);
+    if (text === '' && allowEmpty) onCommit(null);
+    else if (inRange(n) && String(n) === text.trim()) onCommit(n);
+  };
+
+  const finish = () => {
+    if (draft === null) return;
+    const n = parseInt(draft, 10);
+    if (draft.trim() === '') {
+      // Left empty: clear it if that's allowed, otherwise put the old number back.
+      onCommit(allowEmpty ? null : before);
+    } else if (!Number.isNaN(n)) {
+      onCommit(Math.min(max, Math.max(min, n)));
+    }
+    setDraft(null);
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      min={min}
+      max={max}
+      placeholder={placeholder}
+      value={shown}
+      onChange={onChange}
+      onFocus={() => setBefore(value)}
+      onBlur={finish}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+    />
+  );
 }
