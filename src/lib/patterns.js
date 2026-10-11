@@ -123,9 +123,22 @@ export function parseAnnounceList(text) {
   return [...new Set(nums.map(Number).filter((n) => n >= 1 && n <= 75))].sort((a, b) => a - b);
 }
 
-/** The milestone announcement for the Nth call: "That's 40 numbers called. 10 to go." */
-export function milestoneText(count, limit) {
-  const left = limit != null ? limit - count : 0;
+export const DEFAULT_PRIZE_MESSAGE = 'Special prize! Check your cards for O 69.';
+export const MILESTONE_PLACEHOLDER = "That's {called} numbers called. {left} to go.";
+
+/**
+ * The milestone announcement for the Nth call. With no custom wording:
+ * "That's 40 numbers called. 10 to go." Custom wording can use {called},
+ * {left} and {total}, e.g. "We're at {called}. Only {left} left!"
+ */
+export function milestoneText(count, limit, template = '') {
+  const left = limit != null ? Math.max(0, limit - count) : 0;
+  if (template && template.trim()) {
+    return template
+      .replace(/\{called\}/gi, String(count))
+      .replace(/\{left\}/gi, String(left))
+      .replace(/\{total\}/gi, limit != null ? String(limit) : String(count));
+  }
   return `That's ${count} ${count === 1 ? 'number' : 'numbers'} called.${left > 0 ? ` ${left} to go.` : ''}`;
 }
 

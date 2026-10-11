@@ -25,6 +25,7 @@ export default function Display() {
         <div className="tv__center">
           <p className="tv__event">{screen.eventName}</p>
           <h1 className="tv__huge">Thanks for playing</h1>
+          {screen.endMessage && <p className="tv__sub">{screen.endMessage}</p>}
         </div>
       )}
     </div>
@@ -54,7 +55,7 @@ function GameScreen({ s, now }) {
         <span className="tv__count">
           {s.limit != null
             ? `${s.called.length} of ${s.limit} numbers called`
-            : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called`}
+            : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called${s.untilBingo ? ', playing until a bingo' : ''}`}
         </span>
       </header>
 

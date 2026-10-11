@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useEvents } from '../lib/store.js';
-import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, isMilestone, milestoneText, LETTERS } from '../lib/patterns.js';
+import { useEvents, updateEvent } from '../lib/store.js';
+import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, isMilestone, milestoneText, DEFAULT_PRIZE_MESSAGE, LETTERS } from '../lib/patterns.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
@@ -12,14 +12,13 @@ const RUN_KEY = 'bingo.run.v1';
 // Special prize: when switched on for the current game and this number is
 // called, calling pauses and the announcement below is read out and shown.
 const PRIZE_NUMBER = 69; // O 69
-const PRIZE_KEY = 'bingo.prize.v1';
-const DEFAULT_PRIZE_MESSAGE = 'Special prize! Check your cards for O 69.';
+const PRIZE_KEY = 'bingo.prize.v1'; // older versions kept the wording per device
 
-function loadPrizeMessage() {
+function legacyPrizeMessage() {
   try {
-    return localStorage.getItem(PRIZE_KEY) || DEFAULT_PRIZE_MESSAGE;
+    return localStorage.getItem(PRIZE_KEY) || '';
   } catch {
-    return DEFAULT_PRIZE_MESSAGE;
+    return '';
   }
 }
 
@@ -89,19 +88,18 @@ function CallerInner({ event }) {
   const latest = run.called[run.called.length - 1];
   const left = pool.length - run.called.length;
   // Optional limit on numbers called this game; "extra" is what the caller added during play.
-  const limit = isGame ? callLimitFor(item, pool.length, run.extra || 0) : null;
+  // "Keep going until a bingo" (run.untilBingo) lifts the limit for the rest of this game.
+  const limit = isGame && !run.untilBingo ? callLimitFor(item, pool.length, run.extra || 0) : null;
+  const limitLifted = isGame && !!run.untilBingo && !!item.callLimit?.enabled;
   const atLimit = limit != null && run.called.length >= limit;
   // The O 69 prize is only offered when O numbers can be called this game.
   const prizeAvailable = isGame && pool.includes(PRIZE_NUMBER);
   const prizeOn = prizeAvailable && !!run.prizeOn;
-  const [prizeMessage, setPrizeMessage] = useState(loadPrizeMessage);
-  useEffect(() => {
-    try {
-      localStorage.setItem(PRIZE_KEY, prizeMessage);
-    } catch {
-      /* ignore */
-    }
-  }, [prizeMessage]);
+  // The prize wording is saved with the event (set it in setup or here during the game).
+  const prizeMessage = (event.prizeMessage ?? '').trim() || legacyPrizeMessage() || DEFAULT_PRIZE_MESSAGE;
+  const setPrizeMessage = (text) => updateEvent(event.id, { prizeMessage: text });
+  // Read out and shown on the TV when the event ends.
+  const closingMessage = (event.endMessage ?? '').trim() || `That's the end of ${event.name}. Thanks for playing!`;
 
   // Persist the run so a page reload doesn't lose the game.
   useEffect(() => {
@@ -140,7 +138,7 @@ function CallerInner({ event }) {
       const reached = limit != null && run.called.length === limit && audio.announce;
       const prize = prizeOn && latest === PRIZE_NUMBER;
       // A milestone the host asked for ("That's 40 numbers called. 10 to go."), unless it's the final number.
-      const milestone = audio.announce && !reached && isMilestone(item, run.called.length) ? milestoneText(run.called.length, limit) : '';
+      const milestone = audio.announce && !reached && limit != null && isMilestone(item, run.called.length) ? milestoneText(run.called.length, limit, item.callLimit?.message) : '';
       const after = [prize ? prizeMessage : '', milestone, reached ? `That's ${limit} numbers.` : ''].filter(Boolean).join(' ... ');
       announceNumber(latest, undefined, after);
     }
@@ -175,6 +173,8 @@ function CallerInner({ event }) {
     nextCallAt: run.phase === 'calling' ? run.nextCallAt : null,
     limit,
     prizeMessage: run.phase === 'prize' ? prizeMessage : null,
+    untilBingo: limitLifted,
+    endMessage: run.phase === 'end' ? closingMessage : null,
     interval,
     endsAt: run.endsAt ?? null,
     message: item?.type === 'break' ? item.message : '',
@@ -220,6 +220,18 @@ function CallerInner({ event }) {
     }));
   };
   const [customMore, setCustomMore] = useState('');
+  /** Drop the number limit for the rest of this game and keep calling until someone wins. */
+  const keepGoing = () => {
+    unlockAudio();
+    const resumeNow = run.phase === 'limit';
+    if (audio.announce) say("We'll keep going until there's a bingo.");
+    setRun((r) => ({
+      ...r,
+      untilBingo: true,
+      ...(r.phase === 'limit' ? { phase: 'calling', nextCallAt: Date.now() + (audio.announce ? 3000 : 1200) } : {}),
+    }));
+    return resumeNow;
+  };
   const confirmWin = (announce = true) => {
     if (announce && audio.announce) say('We have a winner! Congratulations.');
     setRun((r) => ({ ...r, phase: 'over', nextCallAt: null }));
@@ -241,6 +253,14 @@ function CallerInner({ event }) {
   };
   const undo = () => setRun((r) => ({ ...r, called: r.called.slice(0, -1), phase: r.phase === 'limit' || r.phase === 'prize' ? 'paused' : r.phase, remaining: r.phase === 'limit' || r.phase === 'prize' ? interval : r.remaining }));
   const setSpeed = (sec) => setRun((r) => ({ ...r, interval: sec, nextCallAt: r.phase === 'calling' ? Math.min(r.nextCallAt, Date.now() + sec * 1000) : r.nextCallAt }));
+  /** End the whole event: thank-you screen on the TV and the closing message read out. */
+  const endEvent = () => {
+    const inProgress = isGame && run.called.length > 0 && !['over', 'end'].includes(run.phase);
+    if (inProgress && !confirm('A game is still in progress. End the whole event now?')) return;
+    unlockAudio();
+    if (audio.enabled) say(closingMessage);
+    setRun(freshState(event, event.items.length));
+  };
   const goTo = (index) => {
     const inProgress = isGame && run.called.length > 0 && run.phase !== 'over';
     if (inProgress && !confirm('This game is still in progress. Leave it? Its called numbers will be cleared.')) return;
@@ -277,6 +297,9 @@ function CallerInner({ event }) {
         <a href="#/" className="caller__back">All events</a>
         <h1 className="caller__event">{event.name}</h1>
         <a className="btn btn--quiet" href={`#/event/${event.id}`}>Edit event</a>
+        {run.phase !== 'end' && (
+          <button className="btn btn--quiet" onClick={endEvent}>End event</button>
+        )}
         <AudioControls />
         <TvHelp />
         <button className="btn btn--tv" onClick={openDisplayWindow}>Open TV display</button>
@@ -303,8 +326,13 @@ function CallerInner({ event }) {
         {run.phase === 'end' && (
           <section className="stage stage--center">
             <h2 className="stage__title">That's the end of {event.name}</h2>
-            <p className="muted">The TV is showing a thank-you screen.</p>
-            <button className="btn" onClick={() => goTo(0)}>Start the event again</button>
+            <p className="muted">The TV is showing a thank-you screen with your closing message:</p>
+            <p className="closing-preview">{closingMessage}</p>
+            <div className="row row--center">
+              <a className="btn btn--primary" href="#/">Back to all events</a>
+              <button className="btn" onClick={() => audio.enabled && say(closingMessage)} disabled={!audio.enabled}>Play the message again</button>
+              <button className="btn btn--quiet" onClick={() => goTo(0)}>Start the event again</button>
+            </div>
           </section>
         )}
 
@@ -317,8 +345,8 @@ function CallerInner({ event }) {
               <button className="btn" onClick={() => addMinutes(-1)}>Take off a minute</button>
               <button className="btn" onClick={() => addMinutes(1)}>Add a minute</button>
             </div>
-            <button className="btn btn--primary btn--big" onClick={() => goTo(run.index + 1)}>
-              {next ? `End intermission and go to ${next.name}` : 'End intermission and finish'}
+            <button className="btn btn--primary btn--big" onClick={() => (next ? goTo(run.index + 1) : endEvent())}>
+              {next ? `End intermission and go to ${next.name}` : 'End intermission and end the event'}
             </button>
           </section>
         )}
@@ -368,7 +396,7 @@ function CallerInner({ event }) {
                 <p className="muted">
                   {limit != null
                     ? `${run.called.length} of ${limit} called${(run.extra || 0) > 0 ? ` (${run.extra} added)` : ''}, ${left} left in play`
-                    : `${run.called.length} called, ${left} left in play`}
+                    : `${run.called.length} called, ${left} left in play${limitLifted ? ', playing until a bingo' : ''}`}
                 </p>
 
                 <div className="row">
@@ -380,6 +408,7 @@ function CallerInner({ event }) {
                     <>
                       <button className="btn btn--primary btn--big" onClick={() => addMore(5)}>Add 5 more</button>
                       <button className="btn btn--big" onClick={() => addMore(10)}>Add 10 more</button>
+                      <button className="btn btn--big" onClick={keepGoing}>Keep going until a bingo</button>
                     </>
                   )}
                   {(run.phase === 'calling' || run.phase === 'paused' || run.phase === 'limit' || run.phase === 'prize') && (
@@ -392,8 +421,8 @@ function CallerInner({ event }) {
                     </>
                   )}
                   {run.phase === 'over' && (
-                    <button className="btn btn--primary btn--big" onClick={() => goTo(run.index + 1)}>
-                      {next ? `Go to ${next.name}` : 'Finish the event'}
+                    <button className="btn btn--primary btn--big" onClick={() => (next ? goTo(run.index + 1) : endEvent())}>
+                      {next ? `Go to ${next.name}` : 'End the event'}
                     </button>
                   )}
                 </div>
@@ -410,7 +439,7 @@ function CallerInner({ event }) {
                       <>
                         <label className="prize__message">
                           <span className="field__label">Announcement</span>
-                          <input value={prizeMessage} onChange={(e) => setPrizeMessage(e.target.value)} placeholder={DEFAULT_PRIZE_MESSAGE} />
+                          <input value={event.prizeMessage ?? prizeMessage} onChange={(e) => setPrizeMessage(e.target.value)} placeholder={DEFAULT_PRIZE_MESSAGE} />
                         </label>
                         {run.phase !== 'prize' && (
                           <p className="muted">When O 69 is called, calling pauses and this is read out and shown on the TV.</p>
@@ -460,6 +489,7 @@ function CallerInner({ event }) {
                       <>
                         <button type="button" className="btn btn--quiet" onClick={() => addMore(5)}>+5</button>
                         <button type="button" className="btn btn--quiet" onClick={() => addMore(10)}>+10</button>
+                        <button type="button" className="btn btn--quiet" onClick={keepGoing}>Keep going until a bingo</button>
                       </>
                     )}
                     <input

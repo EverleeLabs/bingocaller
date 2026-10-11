@@ -5,15 +5,17 @@ import { parseBackup } from './backup.js';
 const file = (events, extra = {}) => JSON.stringify({ app: 'bingo-caller', version: 1, events, ...extra });
 
 test('reads a valid export', () => {
-  const { events } = parseBackup(file([{ id: 'abc', name: 'Friday', interval: 8, items: [
-    { id: 'g1', type: 'game', name: 'Game 1', patternIds: ['corners', 'col-picks'], colPick: { cols: [1, 3] }, callLimit: { enabled: true, count: 35, announceAt: [30, 20, 20, 99] } },
+  const { events } = parseBackup(file([{ id: 'abc', name: 'Friday', interval: 8, prizeMessage: 'Free dinner!', endMessage: 'See you next week!', items: [
+    { id: 'g1', type: 'game', name: 'Game 1', patternIds: ['corners', 'col-picks'], colPick: { cols: [1, 3] }, callLimit: { enabled: true, count: 35, announceAt: [30, 20, 20, 99], message: 'At {called}!' } },
     { id: 'b1', type: 'break', name: 'Break', minutes: 15, message: 'Snacks' },
   ] }]));
   assert.equal(events[0].name, 'Friday');
+  assert.equal(events[0].prizeMessage, 'Free dinner!');
+  assert.equal(events[0].endMessage, 'See you next week!');
   assert.deepEqual(events[0].items[0].patternIds, ['corners', 'col-picks']);
   assert.deepEqual(events[0].items[0].colPick, { cols: [1, 3] });
   assert.equal(events[0].items[1].minutes, 15);
-  assert.deepEqual(events[0].items[0].callLimit, { enabled: true, count: 35, announceAt: [20, 30] });
+  assert.deepEqual(events[0].items[0].callLimit, { enabled: true, count: 35, announceAt: [20, 30], message: 'At {called}!' });
 });
 
 test('rejects files that are not exports', () => {

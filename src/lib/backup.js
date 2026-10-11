@@ -67,6 +67,8 @@ function cleanEvent(raw) {
     items,
     createdAt: num(raw.createdAt, 0, 9e15, Date.now()),
     updatedAt: num(raw.updatedAt, 0, 9e15, Date.now()),
+    ...(typeof raw.prizeMessage === 'string' ? { prizeMessage: raw.prizeMessage.slice(0, 200) } : {}),
+    ...(typeof raw.endMessage === 'string' ? { endMessage: raw.endMessage.slice(0, 300) } : {}),
   };
 }
 
@@ -95,6 +97,7 @@ function cleanItem(raw) {
         announceAt: Array.isArray(raw.callLimit.announceAt)
           ? [...new Set(raw.callLimit.announceAt.filter((n) => Number.isInteger(n) && n >= 1 && n <= 75))].sort((a, b) => a - b)
           : [],
+        message: str(raw.callLimit.message, ''),
       };
     }
     if (!game.patternIds.length) game.patternIds = ['any-line'];

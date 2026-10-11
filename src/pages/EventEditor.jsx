@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useEvents, updateEvent, newGame, newBreak } from '../lib/store.js';
-import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, parseAnnounceList, milestoneText, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
+import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, parseAnnounceList, milestoneText, DEFAULT_PRIZE_MESSAGE, MILESTONE_PLACEHOLDER, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
 import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.jsx';
 import { navigate } from '../App.jsx';
 
@@ -55,6 +55,30 @@ export default function EventEditor({ id }) {
           Run event
         </button>
       </header>
+
+      <section className="extras" aria-label="Announcements">
+        <label className="field">
+          <span className="field__label">O 69 prize announcement</span>
+          <input
+            value={event.prizeMessage ?? ''}
+            placeholder={DEFAULT_PRIZE_MESSAGE}
+            onChange={(e) => set({ prizeMessage: e.target.value })}
+          />
+        </label>
+        <p className="muted">
+          Read out and shown on the TV when O 69 is called. Switch the prize on during any game where O numbers are called, from the
+          caller screen. Leave blank to use the wording shown.
+        </p>
+        <label className="field extras__gap">
+          <span className="field__label">Closing message</span>
+          <input
+            value={event.endMessage ?? ''}
+            placeholder={`That's the end of ${event.name || 'tonight'}. Thanks for playing!`}
+            onChange={(e) => set({ endMessage: e.target.value })}
+          />
+        </label>
+        <p className="muted">Read out and shown on the TV when you end the event after the last game.</p>
+      </section>
 
       <section className="stack">
         <div className="row row--between">
@@ -224,7 +248,8 @@ function CallLimit({ item, poolSize, onChange }) {
   const on = !!item.callLimit?.enabled;
   const count = item.callLimit?.count ?? Math.min(40, poolSize);
   const announceAt = item.callLimit?.announceAt || [];
-  const set = (patch) => onChange({ callLimit: { enabled: on, count, announceAt, ...patch } });
+  const message = item.callLimit?.message ?? '';
+  const set = (patch) => onChange({ callLimit: { enabled: on, count, announceAt, message, ...patch } });
   const [draft, setDraft] = useState(null); // text while typing in the Announce at box
   const listText = announceAt.join(', ');
   const stopAt = Math.min(count, poolSize);
@@ -277,10 +302,21 @@ function CallLimit({ item, poolSize, onChange }) {
                 </button>
               )}
             </div>
+            {announceAt.length > 0 && (
+              <label className="field">
+                <span className="field__label">Milestone wording</span>
+                <input className="milestones__wording" value={message} placeholder={MILESTONE_PLACEHOLDER} onChange={(e) => set({ message: e.target.value })} />
+              </label>
+            )}
             <p className="muted">
               {announceAt.length === 0
                 ? 'List call numbers to announce, separated by commas. For example, at 40 the caller adds: “' + milestoneText(40, Math.max(stopAt, 41)) + '”'
-                : `After ${announceAt.length === 1 ? 'call' : 'calls'} ${announceAt.length > 1 ? `${announceAt.slice(0, -1).join(', ')} and ${announceAt[announceAt.length - 1]}` : announceAt[0]} the caller adds, for example: “${milestoneText(announceAt[0], stopAt)}”`}
+                : <>
+                    Use <code>{'{called}'}</code>, <code>{'{left}'}</code> and <code>{'{total}'}</code> to fill in the numbers. After{' '}
+                    {announceAt.length === 1 ? 'call' : 'calls'}{' '}
+                    {announceAt.length > 1 ? `${announceAt.slice(0, -1).join(', ')} and ${announceAt[announceAt.length - 1]}` : announceAt[0]}{' '}
+                    the caller adds, for example: <strong>“{milestoneText(announceAt[0], stopAt, message)}”</strong>
+                  </>}
               {announceAt.some((n) => n >= stopAt) && ` Numbers at or past ${stopAt} are covered by the end-of-numbers announcement.`}
             </p>
           </div>

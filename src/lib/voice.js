@@ -78,8 +78,13 @@ export function stopSpeaking() {
   if (speechSupported) speechSynthesis.cancel();
 }
 
+// Bumped on every new announcement, so a number call still waiting for its
+// chime never talks over something said after it (e.g. "Bingo!").
+let speechSeq = 0;
+
 /** Speak text with the saved voice settings. */
 export function say(text, s = settings) {
+  speechSeq++;
   if (!speechSupported || !s.enabled) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
@@ -100,7 +105,9 @@ export function say(text, s = settings) {
 /** Speak a call. `after` is extra text read straight after it (e.g. "That's 50 numbers."). */
 export async function announceNumber(n, s = settings, after = '') {
   if (!s.enabled) return;
+  const mine = ++speechSeq;
   if (s.chime) await chime(s.volume);
+  if (mine !== speechSeq) return; // something newer was said during the chime
   say(`${callWords(n, s)}${after ? ` ... ${after}` : ''}`, s);
 }
 

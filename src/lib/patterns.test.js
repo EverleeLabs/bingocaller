@@ -97,3 +97,9 @@ test('milestone announcements', () => {
   assert.equal(isMilestone(game, 41), false);
   assert.equal(isMilestone({ callLimit: { enabled: false, count: 50, announceAt: [40] } }, 40), false);
 });
+
+test('custom milestone wording', () => {
+  assert.equal(milestoneText(40, 50, "We're at {called}. Only {left} left out of {total}!"), "We're at 40. Only 10 left out of 50!");
+  assert.equal(milestoneText(45, 50, 'Last few numbers, {LEFT} to go'), 'Last few numbers, 5 to go');
+  assert.equal(milestoneText(40, 50, '   '), "That's 40 numbers called. 10 to go.");
+});
