@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useAudioSettings, setAudio, useVoices, announceNumber, unlockAudio, speechSupported } from '../lib/voice.js';
+import { useAudioSettings, setAudio, useVoices, announceNumber, unlockAudio, speechSupported, DIGIT_PAUSES } from '../lib/voice.js';
 
 /** Sound toggle plus a small panel of voice settings. */
 export default function AudioControls() {
@@ -69,6 +69,16 @@ export default function AudioControls() {
 
           <Check label="Say each number twice" checked={s.repeat} onChange={(v) => setAudio({ repeat: v })} />
           <Check label="Read the digits too (“G 52, five two”)" checked={s.digits} onChange={(v) => setAudio({ digits: v })} />
+          {s.digits && (
+            <label className="field audio__sub">
+              <span className="field__label">Pause before the digits</span>
+              <select value={s.digitPause} onChange={(e) => setAudio({ digitPause: Number(e.target.value) })}>
+                {DIGIT_PAUSES.map((p) => (
+                  <option key={p.ms} value={p.ms}>{p.label}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <Check label="Chime before each number" checked={s.chime} onChange={(v) => setAudio({ chime: v })} />
           <Check label="Announce game starts, bingos and intermissions" checked={s.announce} onChange={(v) => setAudio({ announce: v })} />
 
