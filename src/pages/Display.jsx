@@ -50,8 +50,8 @@ function GameScreen({ s, now }) {
   return (
     <div className="tv__game">
       <header className="tv__bar">
-        <span className="tv__event">{s.eventName}</span>
         <h1 className="tv__title">{s.title}</h1>
+        <span className="tv__event">{s.eventName}</span>
         <span className="tv__count">
           {s.limit != null
             ? `${s.called.length} of ${s.limit} numbers called`
