@@ -332,12 +332,13 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
   grid-template-rows: auto 1fr;
   grid-template-areas: 'bar bar' 'left right';
 }
-.tv__bar { grid-area: bar; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 2vw; }
+.tv__bar { grid-area: bar; display: grid; grid-template-columns: minmax(0, 32fr) minmax(0, 68fr); column-gap: 3vw; align-items: center; }
+.tv__game-info { display: flex; flex-direction: column; gap: 0.6vh; }
 .tv__event { font-size: 4.4vh; font-weight: 700; color: rgba(255, 255, 255, 0.8); }
 .tv__bar .tv__event { font-size: 7.5vh; font-weight: 900; font-variation-settings: 'wdth' 120; line-height: 1; color: #fff; text-align: center; }
 .tv__title { font-size: 5vh; font-weight: 800; font-variation-settings: 'wdth' 118; }
 .tv__center .tv__title { font-size: 7vh; }
-.tv__count { font-size: 2.6vh; font-weight: 600; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; text-align: right; }
+.tv__count { font-size: 2.6vh; font-weight: 600; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; }
 
 .tv__left { grid-area: left; display: flex; flex-direction: column; align-items: center; gap: 2.5vh; min-height: 0; }
 .tv__ballwrap { animation: drop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1); }
@@ -380,8 +381,8 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 
 @media (max-aspect-ratio: 1/1) {
   .tv__game { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; grid-template-areas: 'bar' 'left' 'right'; }
-  .tv__bar { grid-template-columns: 1fr auto; }
-  .tv__bar .tv__event { grid-column: 1 / -1; grid-row: 1; font-size: 6vw; }
+  .tv__bar { grid-template-columns: 1fr; row-gap: 1vh; }
+  .tv__bar .tv__event { grid-row: 1; font-size: 6vw; }
   .tv__left { flex-direction: row; flex-wrap: wrap; justify-content: center; }
   .tv__pattern { margin-top: 0; }
   .ball--xl { --size: 26vw; }

@@ -50,13 +50,15 @@ function GameScreen({ s, now }) {
   return (
     <div className="tv__game">
       <header className="tv__bar">
-        <h1 className="tv__title">{s.title}</h1>
+        <div className="tv__game-info">
+          <h1 className="tv__title">{s.title}</h1>
+          <span className="tv__count">
+            {s.limit != null
+              ? `${s.called.length} of ${s.limit} numbers called`
+              : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called${s.untilBingo ? ', playing until a bingo' : ''}`}
+          </span>
+        </div>
         <span className="tv__event">{s.eventName}</span>
-        <span className="tv__count">
-          {s.limit != null
-            ? `${s.called.length} of ${s.limit} numbers called`
-            : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called${s.untilBingo ? ', playing until a bingo' : ''}`}
-        </span>
       </header>
 
       <section className="tv__left">
