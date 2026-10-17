@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTheme, pruneImages, themeStyle, contrast, themeWarnings, themePictures, cleanCrop, resizeCrop } from './theme.js';
+import { cleanTheme, pruneImages, themeStyle, contrast, themeWarnings, themePictures, renamePictures, cleanCrop, resizeCrop } from './theme.js';
 
 test('an empty theme means the standard look', () => {
   assert.equal(cleanTheme({}), undefined);
@@ -33,6 +33,24 @@ test('contrast warnings', () => {
 test('picture ids resolve to their data', () => {
   assert.deepEqual(themePictures({ image: 'p', logo: 'gone' }, { p: 'data:p' }), { image: 'data:p', logo: null, logoSource: null });
   assert.deepEqual(themePictures(undefined, undefined), { image: null, logo: null, logoSource: null });
+});
+
+test('imported pictures get new ids', () => {
+  let n = 0;
+  const next = () => `new${++n}`;
+  const { theme, images } = renamePictures(
+    { bg: '#112233', image: 'p', logo: 'l', logoSource: 'l', logoCrop: { x: 0, y: 0, w: 1, h: 1 } },
+    { p: 'data:p', l: 'data:l', unused: 'data:u' },
+    next,
+  );
+  assert.deepEqual(theme, { bg: '#112233', image: 'new1', logo: 'new2', logoSource: 'new2', logoCrop: { x: 0, y: 0, w: 1, h: 1 } });
+  assert.deepEqual(images, { new1: 'data:p', new2: 'data:l' });
+  // A missing picture is dropped, and the crop goes with a missing original.
+  assert.deepEqual(renamePictures({ logo: 'l', logoSource: 'gone', logoCrop: { x: 0, y: 0, w: 1, h: 1 } }, { l: 'data:l' }, next), {
+    theme: { logo: 'new3' },
+    images: { new3: 'data:l' },
+  });
+  assert.deepEqual(renamePictures(undefined, undefined, next), { theme: undefined, images: {} });
 });
 
 test('logo and font settings are kept only when valid', () => {

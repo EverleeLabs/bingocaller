@@ -1,20 +1,23 @@
 import { useSyncExternalStore } from 'react';
-import { cleanTheme, themePictures, PICTURE_KEYS } from './theme.js';
+import { cleanTheme, PICTURE_KEYS } from './theme.js';
 import { uid } from './store.js';
 
 // Colour sets the host saved to reuse in any event, kept in this browser.
-// set = { id, name, theme, images: { [id]: dataUrl } }; the set carries its
-// own copy of any picture or logo so it still works after the event is deleted.
+// set = { id, name, theme }; its picture and logo are ids in the picture store
+// (src/lib/pictures.js), kept there while any set or event uses them.
 
 const KEY = 'bingo.palettes.v1';
 const listeners = new Set();
+let readable = true; // false if the saved sets couldn't be read
 let cache = load();
 
 function load() {
   try {
     const list = JSON.parse(localStorage.getItem(KEY));
+    readable = true;
     return Array.isArray(list) ? list : [];
   } catch {
+    readable = false;
     return [];
   }
 }
@@ -40,18 +43,16 @@ window.addEventListener('storage', (e) => {
 
 const subscribe = (l) => (listeners.add(l), () => listeners.delete(l));
 export const useSavedSets = () => useSyncExternalStore(subscribe, () => cache);
+export const allSets = () => cache;
+export const setsReadable = () => readable;
+export const mapSets = (fn) => save(cache.map(fn));
 
-/** Save a theme (with its pictures, taken from the event's images) under a name. */
-export function saveSet(name, theme, eventImages) {
-  const pics = themePictures(theme, eventImages);
-  const images = {};
+/** Save a theme under a name. `pictures` is { image, logo, logoSource }: ones that are missing are left out. */
+export function saveSet(name, theme, pictures) {
   const t = { ...theme };
-  for (const k of PICTURE_KEYS) {
-    if (pics[k]) {
-      images[t[k]] = pics[k];
-    } else delete t[k];
-  }
-  const set = { id: uid(), name: name.trim().slice(0, 60) || 'My colours', theme: cleanTheme(t) || {}, images };
+  for (const k of PICTURE_KEYS) if (!pictures[k]) delete t[k];
+  if (!t.logoSource) delete t.logoCrop;
+  const set = { id: uid(), name: name.trim().slice(0, 60) || 'My colours', theme: cleanTheme(t) || {} };
   return save([...cache, set]);
 }
 

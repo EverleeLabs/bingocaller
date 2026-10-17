@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useEvents, createEvent, deleteEvent, duplicateEvent, importEvents, isSavedHere } from '../lib/store.js';
 import { downloadEvents, parseBackup, backupFilename, eventFilename } from '../lib/backup.js';
+import { withPictures, storeImportedPictures } from '../lib/pictures.js';
 import { navigate } from '../App.jsx';
 
 export default function EventList() {
@@ -34,8 +35,14 @@ export default function EventList() {
       return { ...p, picked };
     });
 
-  const confirmImport = () => {
-    const chosen = pending.events.filter((x) => pending.picked.has(x.id));
+  const exportEvents = async (list, filename) => downloadEvents(await withPictures(list), filename);
+
+  const confirmImport = async () => {
+    const chosen = await storeImportedPictures(pending.events.filter((x) => pending.picked.has(x.id)));
+    if (!chosen) {
+      setError('This browser is out of room to save the pictures in that file.');
+      return;
+    }
     const { added, replaced } = importEvents(chosen);
     const ev = (n) => `${n} ${n === 1 ? 'event' : 'events'}`;
     const parts = [];
@@ -63,7 +70,7 @@ export default function EventList() {
           <div className="row">
             <button className="btn btn--quiet" onClick={() => fileRef.current.click()}>Import</button>
             {events.length > 0 && (
-              <button className="btn btn--quiet" onClick={() => downloadEvents(events, backupFilename())}>
+              <button className="btn btn--quiet" onClick={() => exportEvents(events, backupFilename())}>
                 Export all
               </button>
             )}
@@ -139,7 +146,7 @@ export default function EventList() {
                     <button className="btn btn--primary" onClick={() => navigate(`/run/${e.id}`)}>Run event</button>
                     <button className="btn" onClick={() => navigate(`/event/${e.id}`)}>Edit</button>
                     <button className="btn btn--quiet" onClick={() => duplicateEvent(e.id)}>Duplicate</button>
-                    <button className="btn btn--quiet" onClick={() => downloadEvents([e], eventFilename(e))}>Export</button>
+                    <button className="btn btn--quiet" onClick={() => exportEvents([e], eventFilename(e))}>Export</button>
                     <button
                       className="btn btn--quiet btn--danger"
                       onClick={() => confirm(`Delete “${e.name}”? This can't be undone.`) && deleteEvent(e.id)}

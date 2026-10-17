@@ -5,12 +5,16 @@ import { useSyncExternalStore } from 'react';
 
 const KEY = 'bingo.events.v1';
 const listeners = new Set();
+let readable = true; // false if the saved events couldn't be read
 let cache = load();
 
 function load() {
   try {
-    return JSON.parse(localStorage.getItem(KEY)) || [];
+    const list = JSON.parse(localStorage.getItem(KEY)) || [];
+    readable = true;
+    return list;
   } catch {
+    readable = false;
     return [];
   }
 }
@@ -38,6 +42,11 @@ window.addEventListener('storage', (e) => {
 const subscribe = (l) => (listeners.add(l), () => listeners.delete(l));
 export const useEvents = () => useSyncExternalStore(subscribe, () => cache);
 export const getEvent = (id) => cache.find((e) => e.id === id);
+export const allEvents = () => cache;
+export const eventsReadable = () => readable;
+
+/** Change every event without marking it as edited. */
+export const mapEvents = (fn) => save(cache.map(fn));
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 

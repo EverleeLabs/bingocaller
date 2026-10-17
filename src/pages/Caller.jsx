@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEvents, updateEvent } from '../lib/store.js';
 import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, isMilestone, milestoneText, DEFAULT_PRIZE_MESSAGE, LETTERS } from '../lib/patterns.js';
-import { themeStyle, hasSurface, themePictures } from '../lib/theme.js';
+import { themeStyle, hasSurface } from '../lib/theme.js';
+import { usePictures } from '../lib/pictures.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, sayWhenQuiet, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
@@ -169,7 +170,7 @@ function CallerInner({ event }) {
 
   // The event's colours (standard unless the host changed them), shared by the TV and this screen.
   const theme = event.theme || {};
-  const { image: themeImage, logo: themeLogo } = themePictures(theme, event.images);
+  const { image: themeImage } = usePictures(theme);
 
   // Publish what the TV should show.
   const next = event.items[run.index + 1];
@@ -195,9 +196,7 @@ function CallerInner({ event }) {
     endsAt: run.endsAt ?? null,
     message: item?.type === 'break' ? item.message : '',
     nextUp: next ? (next.type === 'game' ? `${next.name}: ${patternName(next)}` : next.name) : null,
-    theme,
-    themeImage,
-    themeLogo,
+    theme, // the TV loads its picture and logo from the picture store
   };
   const screenKey = JSON.stringify(screen);
   useEffect(() => publishScreen(JSON.parse(screenKey)), [screenKey]);

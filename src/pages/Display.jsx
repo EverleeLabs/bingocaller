@@ -3,6 +3,7 @@ import { useScreen, useNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, Brand, CornerLogo, fmtClock } from '../components/Bingo.jsx';
 import { letterOf } from '../lib/patterns.js';
 import { themeStyle } from '../lib/theme.js';
+import { usePictures } from '../lib/pictures.js';
 
 export default function Display() {
   const screen = useScreen();
@@ -15,20 +16,20 @@ export default function Display() {
   }, [screen?.eventName]);
 
   // The event's colours (or the current game's own) on every screen.
-  const image = screen?.themeImage;
+  const { image, logo } = usePictures(screen?.theme);
 
   return (
     <div className={`tv${idle ? ' is-idle' : ''}${image ? ' has-image' : ''}`} style={screen ? themeStyle(screen.theme, image) : undefined}>
       <button className="tv__fs" onClick={toggleFullscreen}>
         {document.fullscreenElement ? 'Exit full screen' : 'Full screen'}
       </button>
-      {screen && <CornerLogo logo={screen.themeLogo} theme={screen.theme} />}
+      {screen && <CornerLogo logo={logo} theme={screen.theme} />}
       {!screen && <Waiting />}
-      {screen?.kind === 'game' && <GameScreen s={screen} now={now} />}
-      {screen?.kind === 'break' && <BreakScreen s={screen} now={now} />}
+      {screen?.kind === 'game' && <GameScreen s={screen} logo={logo} now={now} />}
+      {screen?.kind === 'break' && <BreakScreen s={screen} logo={logo} now={now} />}
       {screen?.kind === 'end' && (
         <div className="tv__center">
-          <Brand logo={screen.themeLogo} theme={screen.theme} eventName={screen.eventName} />
+          <Brand logo={logo} theme={screen.theme} eventName={screen.eventName} />
           <h1 className="tv__huge">Thanks for playing</h1>
           {screen.endMessage && <p className="tv__sub">{screen.endMessage}</p>}
         </div>
@@ -46,7 +47,7 @@ function Waiting() {
   );
 }
 
-function GameScreen({ s, now }) {
+function GameScreen({ s, logo, now }) {
   const latest = s.called[s.called.length - 1];
   const recent = s.called.slice(-6, -1).reverse();
   const [fresh, setFresh] = useState(latest);
@@ -63,7 +64,7 @@ function GameScreen({ s, now }) {
               : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called${s.untilBingo ? ', playing until a bingo' : ''}`}
           </span>
         </div>
-        <Brand logo={s.themeLogo} theme={s.theme} eventName={s.eventName} />
+        <Brand logo={logo} theme={s.theme} eventName={s.eventName} />
       </header>
 
       <section className="tv__left">
@@ -130,11 +131,11 @@ function Progress({ remaining, total }) {
   );
 }
 
-function BreakScreen({ s, now }) {
+function BreakScreen({ s, logo, now }) {
   const left = s.endsAt - now;
   return (
     <div className="tv__center">
-      <Brand logo={s.themeLogo} theme={s.theme} eventName={s.eventName} />
+      <Brand logo={logo} theme={s.theme} eventName={s.eventName} />
       <h1 className="tv__title">{s.title}</h1>
       <p className="tv__clock">{left > 0 ? fmtClock(left) : 'Starting soon'}</p>
       {s.message && <p className="tv__sub">{s.message}</p>}

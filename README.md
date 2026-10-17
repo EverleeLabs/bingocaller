@@ -46,7 +46,7 @@ The display window must be open in the same browser as the caller. Showing the b
 
 It's a static site, so `npm run build` outputs `dist/`, which works on any static host (Netlify, Vercel, Cloudflare Pages, GitHub Pages, or any web server). Routes use `#/…`, so no rewrite rules are needed.
 
-Events are saved in each host's own browser (localStorage). Nobody's events are shared or synced between devices yet; adding accounts means replacing `src/lib/store.js` with API calls.
+Events are saved in each host's own browser (localStorage); their pictures and logos are kept in IndexedDB (`src/lib/pictures.js`), which has far more room, and events only hold the pictures' ids. Nobody's events are shared or synced between devices yet; adding accounts means replacing `src/lib/store.js` and `src/lib/pictures.js` with API calls.
 
 ### Backups and moving events
 
@@ -61,6 +61,7 @@ On the events page, **Export all** downloads every event as a `.json` file, and 
 | `src/lib/theme.js` | Event colours, logo and font: defaults, built-in sets, cleaning, CSS variables, contrast checks |
 | `src/lib/palettes.js` | Saved colour sets, reusable in any event |
 | `src/lib/colour.js` | Colour maths: mixing, contrast, readable text |
+| `src/lib/pictures.js` | Pictures and logos in IndexedDB; moves pictures out of events saved by older versions |
 | `src/lib/suggest.js` | Colour suggestions from a background colour or picture |
 | `src/lib/quips.js` | Start-of-game reminder and cheeky reply banks, random picks without repeats |
 | `src/lib/backup.js` | Export and import files |

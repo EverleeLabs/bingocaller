@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { updateEvent, uid } from '../lib/store.js';
 import {
-  DEFAULT_THEME, FONTS, LOGO_PLACES, LOGO_SIZE, BUILT_IN_SETS, PICTURE_KEYS, isCornerPlace,
-  cleanTheme, pruneImages, themePictures, themeStyle, themeWarnings, shrinkImage, shrinkLogo, cropLogo, trimBounds,
+  DEFAULT_THEME, FONTS, LOGO_PLACES, LOGO_SIZE, BUILT_IN_SETS, isCornerPlace,
+  cleanTheme, themeStyle, themeWarnings, shrinkImage, shrinkLogo, cropLogo, trimBounds,
 } from '../lib/theme.js';
+import { usePictures, putPictures } from '../lib/pictures.js';
 import LogoCropper from './LogoCropper.jsx';
 import { suggestThemes, analysePicture } from '../lib/suggest.js';
 import { useSavedSets, saveSet, deleteSet } from '../lib/palettes.js';
@@ -20,7 +21,7 @@ const LOGO_KEYS = ['logo', 'logoSource', 'logoCrop', 'logoPlace', 'logoSize'];
  */
 export default function ThemeEditor({ event }) {
   const theme = event.theme || {};
-  const pictures = themePictures(theme, event.images);
+  const pictures = usePictures(theme);
   const custom = Object.keys(theme).length > 0;
   const [error, setError] = useState('');
   const [open, setOpen] = useState(custom);
@@ -29,11 +30,7 @@ export default function ThemeEditor({ event }) {
   const stats = usePictureStats(pictures.image);
 
   /** Change the event's theme. `fn` gets the latest saved theme so quick changes don't overwrite each other. */
-  const write = (fn, newImages) =>
-    updateEvent(event.id, (e) => {
-      const next = cleanTheme(fn(e.theme || {}));
-      return { theme: next, images: pruneImages({ ...e.images, ...newImages }, next) };
-    });
+  const write = (fn) => updateEvent(event.id, (e) => ({ theme: cleanTheme(fn(e.theme || {})) }));
   const setKey = (key, value) => write((t) => ({ ...t, [key]: value }));
   const setBall = (c, key, value) =>
     write((t) => ({ ...t, balls: Array.from({ length: 5 }, (_, k) => (k === c ? { ...t.balls?.[k], [key]: value } : { ...t.balls?.[k] })) }));
@@ -49,7 +46,11 @@ export default function ThemeEditor({ event }) {
       }
       const data = await shrinkImage(file, theme.bg || DEFAULT_THEME.bg);
       const id = uid();
-      if (!write((t) => ({ ...t, [kind]: id }), { [id]: data })) {
+      if (!(await putPictures({ [id]: data }))) {
+        setError(OUT_OF_ROOM);
+        return;
+      }
+      if (!write((t) => ({ ...t, [kind]: id }))) {
         write((t) => ({ ...t, [kind]: null }));
         setError(OUT_OF_ROOM);
       }
@@ -60,8 +61,12 @@ export default function ThemeEditor({ event }) {
 
   /** Re-crop the current logo, starting from the original upload when there is one. */
   const editCrop = () => {
-    const sourceId = theme.logoSource || theme.logo;
-    setCropping({ src: event.images?.[sourceId], crop: theme.logoSource ? theme.logoCrop : undefined, sourceId });
+    const fromSource = Boolean(pictures.logoSource);
+    setCropping({
+      src: fromSource ? pictures.logoSource : pictures.logo,
+      crop: fromSource ? theme.logoCrop : undefined,
+      sourceId: fromSource ? theme.logoSource : theme.logo,
+    });
   };
   const saveCrop = async (rect) => {
     setError('');
@@ -69,9 +74,9 @@ export default function ThemeEditor({ event }) {
     const cropped = await cropLogo(src, rect);
     const logoId = uid();
     const srcId = sourceId || uid();
-    const newImages = { [logoId]: cropped, ...(sourceId ? {} : { [srcId]: src }) };
-    let ok = write((t) => ({ ...t, logo: logoId, logoSource: srcId, logoCrop: rect }), newImages);
-    if (!ok) ok = write((t) => ({ ...t, logo: logoId, logoSource: null, logoCrop: null }), { [logoId]: cropped }); // no room for the original
+    let ok = (await putPictures({ [logoId]: cropped, ...(sourceId ? {} : { [srcId]: src }) })) &&
+      write((t) => ({ ...t, logo: logoId, logoSource: srcId, logoCrop: rect }));
+    if (!ok) ok = (await putPictures({ [logoId]: cropped })) && write((t) => ({ ...t, logo: logoId, logoSource: null, logoCrop: null })); // no room for the original
     if (!ok) {
       write(() => theme);
       setError(OUT_OF_ROOM);
@@ -83,18 +88,9 @@ export default function ThemeEditor({ event }) {
   const applySet = (set) => {
     if (custom && !confirm(`Replace this event's colours with “${set.name}”?`)) return;
     setError('');
-    const t = { ...set.theme };
-    const newImages = {};
-    for (const k of PICTURE_KEYS) {
-      const data = t[k] && set.images?.[t[k]];
-      if (data) {
-        const id = uid();
-        newImages[id] = data;
-        t[k] = id;
-      } else delete t[k];
-    }
+    const t = set.theme; // its picture and logo are shared with the set, by id
     const keepLogo = (cur) => Object.fromEntries(LOGO_KEYS.map((k) => [k, cur[k]]));
-    const ok = write((cur) => ({ ...t, ...(t.logo ? {} : keepLogo(cur)) }), newImages);
+    const ok = write((cur) => ({ ...t, ...(t.logo ? {} : keepLogo(cur)) }));
     if (!ok) {
       write(() => theme);
       setError(OUT_OF_ROOM);
@@ -269,7 +265,7 @@ export default function ThemeEditor({ event }) {
           )}
           {error && <p className="warn" role="alert">{error}</p>}
 
-          <SaveSet theme={theme} images={event.images} />
+          <SaveSet theme={theme} pictures={pictures} />
 
           {custom && (
             <div className="row">
@@ -317,13 +313,13 @@ function ColourSets({ onApply }) {
   );
 }
 
-function SaveSet({ theme, images }) {
+function SaveSet({ theme, pictures }) {
   const [name, setName] = useState('');
   const [note, setNote] = useState('');
   const submit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const ok = saveSet(name, theme, images);
+    const ok = saveSet(name, theme, pictures);
     setNote(ok ? `Saved “${name.trim()}”. It's in Colour sets for every event.` : 'This browser is out of room to save the set. Try removing a picture first.');
     if (ok) setName('');
   };

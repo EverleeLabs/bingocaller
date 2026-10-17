@@ -12,12 +12,13 @@ export { contrast };
 //   face, faceText,              // ball centre and the number on it
 //   button, bingo,               // caller's main buttons; Bingo button and the TV's Bingo/prize banners (text picked for contrast)
 //   balls: [{ bg, text }] x 5,   // per column (B I N G O): ball colour, text on that colour
-//   image, dim,                  // background picture (id into event.images), fade 0-90
-//   logo, logoSource, logoCrop,  // cropped logo and the uploaded original (ids into event.images), crop { x, y, w, h } as fractions
+//   image, dim,                  // background picture (id in the picture store), fade 0-90
+//   logo, logoSource, logoCrop,  // cropped logo and the uploaded original (picture ids), crop { x, y, w, h } as fractions
 //   logoPlace, logoSize,         // a key of LOGO_PLACES, height as % of the screen (LOGO_SIZE.min-max)
 //   font,                        // key of FONTS
 // }
-// Pictures are stored next to the theme in event.images = { [id]: dataUrl }.
+// Pictures are kept in IndexedDB (src/lib/pictures.js). Backup files, and
+// events saved by older versions, carry them as event.images = { [id]: dataUrl }.
 
 export const DEFAULT_THEME = {
   bg: '#221b45',
@@ -159,6 +160,29 @@ export function pruneImages(images, theme) {
   const used = new Set(PICTURE_KEYS.map((k) => theme?.[k]).filter(Boolean));
   const kept = Object.fromEntries(Object.entries(images || {}).filter(([id]) => used.has(id)));
   return Object.keys(kept).length ? kept : undefined;
+}
+
+/**
+ * Give a theme's pictures new ids from `newId()`. Returns { theme, images }
+ * with only the pictures the theme uses; references to missing ones are dropped.
+ */
+export function renamePictures(theme, images, newId) {
+  if (!theme) return { theme, images: {} };
+  const t = { ...theme };
+  const out = {};
+  const renamed = {};
+  for (const k of PICTURE_KEYS) {
+    const data = t[k] && images?.[t[k]];
+    if (!data) {
+      delete t[k];
+      continue;
+    }
+    renamed[t[k]] ??= newId();
+    out[renamed[t[k]]] = data;
+    t[k] = renamed[t[k]];
+  }
+  if (!t.logoSource) delete t.logoCrop;
+  return { theme: cleanTheme(t), images: out };
 }
 
 /** CSS custom properties for a theme, to set as an inline style. */
