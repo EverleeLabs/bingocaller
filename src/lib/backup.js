@@ -1,5 +1,6 @@
 // Export events to a file and read them back in.
 import { cleanTheme, pruneImages, PICTURE_KEYS } from './theme.js';
+import { cleanLines, cleanBanks } from './quips.js';
 
 /** Drop picture references whose picture isn't in the file. */
 function keepKnownPictures(theme, images) {
@@ -83,6 +84,9 @@ function cleanEvent(raw) {
     updatedAt: num(raw.updatedAt, 0, 9e15, Date.now()),
     ...(typeof raw.prizeMessage === 'string' ? { prizeMessage: raw.prizeMessage.slice(0, 200) } : {}),
     ...(typeof raw.endMessage === 'string' ? { endMessage: raw.endMessage.slice(0, 300) } : {}),
+    ...(typeof raw.gameReminder === 'string' ? { gameReminder: raw.gameReminder.slice(0, 300) } : {}),
+    ...(cleanLines(raw.falseBingoReplies) ? { falseBingoReplies: cleanLines(raw.falseBingoReplies) } : {}),
+    ...(cleanBanks(raw.quipBanks) ? { quipBanks: cleanBanks(raw.quipBanks) } : {}),
     ...(theme ? { theme } : {}),
     ...(images ? { images } : {}),
   };

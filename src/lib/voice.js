@@ -111,6 +111,24 @@ export function say(text, s = settings) {
   speak(text, s);
 }
 
+/**
+ * Speak text once the current call has finished, so a number being read out
+ * isn't cut off. Gives up waiting after a few seconds.
+ */
+export async function sayWhenQuiet(text, s = settings) {
+  const mine = ++quietSeq;
+  const giveUpAt = Date.now() + 6000;
+  // Wait for a number call or announcement, but cut off an earlier one of these.
+  while (isSpeaking() && speechSeq !== quietSpoken && Date.now() < giveUpAt) {
+    await new Promise((r) => setTimeout(r, 100));
+    if (mine !== quietSeq) return; // a newer one was asked for
+  }
+  say(text, s);
+  quietSpoken = speechSeq;
+}
+let quietSeq = 0;
+let quietSpoken = -1;
+
 function speak(text, s) {
   if (!speechSupported || !s.enabled) return;
   speechSynthesis.cancel();

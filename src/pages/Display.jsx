@@ -101,6 +101,22 @@ function GameScreen({ s, now }) {
         <Board called={s.called} activeCols={s.activeCols} latest={latest} size="xl" />
       </section>
       {latest && <p className="sr-only" aria-live="polite">{`${letterOf(latest)} ${latest}`}</p>}
+      <Shout s={s} now={now} />
+    </div>
+  );
+}
+
+const SHOUT_LABELS = { reminder: 'Reminder', 'false-bingo': 'Not a bingo' };
+
+/** The start-of-game reminder or a cheeky reply, shown over the board for a few seconds. */
+function Shout({ s, now }) {
+  const shout = s.shout && now < s.shout.until ? s.shout : s.reminder ? { text: s.reminder, kind: 'reminder' } : null;
+  if (!shout) return null;
+  const label = SHOUT_LABELS[shout.kind];
+  return (
+    <div className={`tv__shout tv__shout--${shout.kind}`} key={`${shout.kind}:${shout.text}`} role="status">
+      {label && <span className="tv__shout-label">{label}</span>}
+      <p>{shout.text}</p>
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, ca
 import { themeStyle, hasSurface, themePictures } from '../lib/theme.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
-import { announceNumber, say, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
+import { announceNumber, say, sayWhenQuiet, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
+import { falseBingoLines, quipBanks, pickLine, speechMs } from '../lib/quips.js';
 import AudioControls from '../components/AudioControls.jsx';
 import TvHelp from '../components/TvHelp.jsx';
 
@@ -101,6 +102,14 @@ function CallerInner({ event }) {
   const setPrizeMessage = (text) => updateEvent(event.id, { prizeMessage: text });
   // Read out and shown on the TV when the event ends.
   const closingMessage = (event.endMessage ?? '').trim() || `That's the end of ${event.name}. Thanks for playing!`;
+  // Read out and shown on the TV as each game starts.
+  const reminder = (event.gameReminder ?? '').trim();
+  // Cheeky replies: one bank for a bingo that isn't, others for any time in a game.
+  const falseLines = falseBingoLines(event);
+  const banks = quipBanks(event);
+  const recentLines = useRef({}); // lines said lately, per bank, so they don't repeat
+  const recentFor = (id) => (recentLines.current[id] ||= []);
+  const shoutShown = run.shout && now < run.shout.until ? run.shout : null;
 
   // Persist the run so a page reload doesn't lose the game.
   useEffect(() => {
@@ -180,6 +189,8 @@ function CallerInner({ event }) {
     prizeMessage: run.phase === 'prize' ? prizeMessage : null,
     untilBingo: limitLifted,
     endMessage: run.phase === 'end' ? closingMessage : null,
+    shout: isGame ? run.shout ?? null : null,
+    reminder: run.phase === 'ready' ? reminder : '',
     interval,
     endsAt: run.endsAt ?? null,
     message: item?.type === 'break' ? item.message : '',
@@ -199,21 +210,51 @@ function CallerInner({ event }) {
   // Actions
   const start = () => {
     unlockAudio();
-    const intro = audio.enabled && audio.announce && run.called.length === 0;
-    if (intro) say(`${item.name}. ${patternName(item)}. Here we go.`);
-    setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + (r.called.length ? interval : intro ? 2500 : 1500) }));
+    const first = run.called.length === 0;
+    const remind = first ? reminder : '';
+    const intro = first && audio.enabled
+      ? [audio.announce && `${item.name}. ${patternName(item)}.`, remind, audio.announce && 'Here we go.'].filter(Boolean).join(' ')
+      : '';
+    if (intro) say(intro);
+    // Leave time for the reminder to be read before the first number.
+    const wait = !first ? interval : remind && intro ? speechMs(intro, audio.rate) + 500 : intro ? 2500 : 1500;
+    setRun((r) => ({
+      ...r,
+      phase: 'calling',
+      nextCallAt: Date.now() + wait,
+      ...(remind ? { shout: { text: remind, kind: 'reminder', until: Date.now() + Math.max(8000, speechMs(remind, audio.rate) + 4000) } } : {}),
+    }));
   };
+  /** Read something out and show it on the TV for a while. Calling waits for it. */
+  const shoutOut = (text, kind) => {
+    if (!text) return;
+    unlockAudio();
+    const busy = isSpeaking();
+    if (audio.enabled) sayWhenQuiet(text);
+    const ms = speechMs(text, audio.rate) + (busy ? 3000 : 0);
+    setRun((r) => ({
+      ...r,
+      shout: { text, kind, until: Date.now() + Math.max(6000, ms + 3000) },
+      ...(r.phase === 'calling' ? { nextCallAt: Math.max(r.nextCallAt, Date.now() + ms + 1000) } : {}),
+    }));
+  };
+  const clearShout = () => setRun((r) => ({ ...r, shout: null }));
   const pause = () => setRun((r) => ({ ...r, phase: 'paused', remaining: Math.max(0, r.nextCallAt - Date.now()) }));
   const resume = () => unlockAudio() || setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + Math.min(r.remaining ?? interval, interval) }));
   const bingo = () => (audio.announce && say('Bingo! Please hold your cards while we check.'), setRun((r) => ({ ...r, phase: 'bingo', remaining: r.nextCallAt ? Math.max(0, r.nextCallAt - Date.now()) : null })));
-  const falseAlarm = () => {
+  /** Not a bingo after all. With `cheeky`, a reply from the event's bank is read out and shown on the TV. */
+  const falseAlarm = (cheeky = false) => {
+    const reply = cheeky ? pickLine(falseLines, recentFor('false-bingo')) : null;
+    const words = `That's not a bingo.${reply ? ` ${reply}` : ''}${atLimit ? '' : " We'll keep going."}`;
+    // A cheeky reply was asked for, so it's read even with announcements off.
+    if (reply ? audio.enabled : audio.announce) say(words);
+    const shout = reply ? { text: reply, kind: 'false-bingo', until: Date.now() + Math.max(6000, speechMs(words, audio.rate) + 3000) } : null;
     if (atLimit) {
-      if (audio.announce) say("That's not a bingo.");
-      setRun((r) => ({ ...r, phase: 'limit', nextCallAt: null }));
+      setRun((r) => ({ ...r, phase: 'limit', nextCallAt: null, ...(shout ? { shout } : {}) }));
       return;
     }
-    if (audio.announce) say("That's not a bingo. We'll keep going.");
-    setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + interval + 2500 }));
+    const wait = reply ? Math.max(interval + 2500, speechMs(words, audio.rate) + 1500) : interval + 2500;
+    setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + wait, ...(shout ? { shout } : {}) }));
   };
   /** Raise the limit by n. If calling had stopped at the limit, carry on. */
   const addMore = (n) => {
@@ -431,7 +472,12 @@ function CallerInner({ event }) {
                   {run.phase === 'bingo' && (
                     <>
                       <button className="btn btn--primary btn--big" onClick={() => confirmWin()}>It's a winner, end game</button>
-                      <button className="btn btn--big" onClick={falseAlarm}>Not a winner, keep calling</button>
+                      <button className="btn btn--big" onClick={() => falseAlarm()}>Not a winner, keep calling</button>
+                      {falseLines.length > 0 && (
+                        <button className="btn btn--big" onClick={() => falseAlarm(true)} title="Reads a random reply from the event's not-a-bingo list">
+                          Not a winner, with a cheeky reply
+                        </button>
+                      )}
                     </>
                   )}
                   {run.phase === 'over' && (
@@ -459,6 +505,28 @@ function CallerInner({ event }) {
                           <p className="muted">When O 69 is called, calling pauses and this is read out and shown on the TV.</p>
                         )}
                       </>
+                    )}
+                  </div>
+                )}
+
+                {run.phase !== 'over' && (reminder || banks.length > 0) && (
+                  <div className="quips">
+                    <span className="quips__label">Say something</span>
+                    <div className="row">
+                      {banks.map((b) => (
+                        <button key={b.id} className="btn" onClick={() => shoutOut(pickLine(b.lines, recentFor(b.id)), 'quip')} title="Reads a random reply from this list and shows it on the TV">
+                          {b.name}
+                        </button>
+                      ))}
+                      {reminder && (
+                        <button className="btn btn--quiet" onClick={() => shoutOut(reminder, 'reminder')}>Repeat the reminder</button>
+                      )}
+                    </div>
+                    {shoutShown && (
+                      <p className="quips__last">
+                        <span>On the TV: “{shoutShown.text}”</span>
+                        <button className="btn btn--quiet" onClick={clearShout}>Take it off</button>
+                      </p>
                     )}
                   </div>
                 )}

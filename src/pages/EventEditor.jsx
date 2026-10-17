@@ -4,6 +4,8 @@ import { PRESETS, variantsFor, activeColumns, previewCells, patternName, pattern
 import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.jsx';
 import { themeStyle } from '../lib/theme.js';
 import ThemeEditor from '../components/ThemeEditor.jsx';
+import RepliesEditor from '../components/RepliesEditor.jsx';
+import { REMINDER_PLACEHOLDER } from '../lib/quips.js';
 import { navigate } from '../App.jsx';
 
 export default function EventEditor({ id }) {
@@ -80,7 +82,23 @@ export default function EventEditor({ id }) {
           />
         </label>
         <p className="muted">Read out and shown on the TV when you end the event after the last game.</p>
+        <label className="field extras__gap">
+          <span className="field__label">Reminder at the start of every game (optional)</span>
+          <textarea
+            rows={2}
+            maxLength={300}
+            value={event.gameReminder ?? ''}
+            placeholder={REMINDER_PLACEHOLDER}
+            onChange={(e) => set({ gameReminder: e.target.value })}
+          />
+        </label>
+        <p className="muted">
+          Read out when you start each game, before the first number, and shown on the TV while players get ready. Repeat it any time
+          from the caller screen. Leave blank for no reminder.
+        </p>
       </section>
+
+      <RepliesEditor event={event} />
 
       <ThemeEditor event={event} />
 
