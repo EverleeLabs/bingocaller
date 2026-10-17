@@ -766,3 +766,5 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .bank__head { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .bank__head .field { flex: 1; min-width: 180px; }
 .bank .btn, .replies__tools .btn { min-height: 34px; padding: 4px 12px; font-size: 0.875rem; }
+/* The two "not a winner" buttons always share a line */
+.bingo-misses { flex-basis: 100%; }

@@ -74,7 +74,13 @@ function GameScreen({ s, logo, now }) {
         {s.phase === 'bingo' && <p className="tv__alert">Bingo! Checking the card</p>}
         {s.phase === 'paused' && <p className="tv__note">Paused</p>}
         {s.phase === 'ready' && <p className="tv__note">Get your cards ready</p>}
-        {s.phase === 'over' && <p className="tv__note">Game over</p>}
+        {s.phase === 'over' && !s.tiebreaker && <p className="tv__note">Game over</p>}
+        {s.phase === 'over' && s.tiebreaker && (
+          <div className="tv__prize" role="status">
+            <p className="tv__alert">Tie breaker!</p>
+            <p className="tv__prize-message">{s.tiebreaker}</p>
+          </div>
+        )}
         {s.phase === 'limit' && <p className="tv__note">That's all {s.limit} numbers</p>}
         {s.phase === 'prize' && (
           <div className="tv__prize" role="status">

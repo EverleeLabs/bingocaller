@@ -84,7 +84,11 @@ function cleanEvent(raw) {
     updatedAt: num(raw.updatedAt, 0, 9e15, Date.now()),
     ...(typeof raw.prizeMessage === 'string' ? { prizeMessage: raw.prizeMessage.slice(0, 200) } : {}),
     ...(typeof raw.endMessage === 'string' ? { endMessage: raw.endMessage.slice(0, 300) } : {}),
+    ...(raw.tiebreaker && typeof raw.tiebreaker === 'object'
+      ? { tiebreaker: { enabled: raw.tiebreaker.enabled === true, message: str(raw.tiebreaker.message, '') } }
+      : {}),
     ...(typeof raw.gameReminder === 'string' ? { gameReminder: raw.gameReminder.slice(0, 300) } : {}),
+    ...(raw.cheekyReplies === true ? { cheekyReplies: true } : {}),
     ...(cleanLines(raw.falseBingoReplies) ? { falseBingoReplies: cleanLines(raw.falseBingoReplies) } : {}),
     ...(cleanBanks(raw.quipBanks) ? { quipBanks: cleanBanks(raw.quipBanks) } : {}),
     ...(theme ? { theme } : {}),

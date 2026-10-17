@@ -6,7 +6,7 @@ import { usePictures } from '../lib/pictures.js';
 import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, sayWhenQuiet, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
-import { falseBingoLines, quipBanks, pickLine, speechMs } from '../lib/quips.js';
+import { falseBingoLines, quipBanks, pickLine, speechMs, DEFAULT_TIEBREAKER_MESSAGE } from '../lib/quips.js';
 import AudioControls from '../components/AudioControls.jsx';
 import TvHelp from '../components/TvHelp.jsx';
 
@@ -105,6 +105,9 @@ function CallerInner({ event }) {
   const closingMessage = (event.endMessage ?? '').trim() || `That's the end of ${event.name}. Thanks for playing!`;
   // Read out and shown on the TV as each game starts.
   const reminder = (event.gameReminder ?? '').trim();
+  // With a tie breaker on, a checked bingo can end the game with more than one winner.
+  const tiebreakerOn = !!event.tiebreaker?.enabled;
+  const tiebreakerMessage = (event.tiebreaker?.message ?? '').trim() || DEFAULT_TIEBREAKER_MESSAGE;
   // Cheeky replies: one bank for a bingo that isn't, others for any time in a game.
   const falseLines = falseBingoLines(event);
   const banks = quipBanks(event);
@@ -191,6 +194,7 @@ function CallerInner({ event }) {
     untilBingo: limitLifted,
     endMessage: run.phase === 'end' ? closingMessage : null,
     shout: isGame ? run.shout ?? null : null,
+    tiebreaker: isGame && run.phase === 'over' && run.tiebreak ? tiebreakerMessage : null,
     reminder: run.phase === 'ready' ? reminder : '',
     interval,
     endsAt: run.endsAt ?? null,
@@ -224,7 +228,7 @@ function CallerInner({ event }) {
       ...(remind ? { shout: { text: remind, kind: 'reminder', until: Date.now() + Math.max(8000, speechMs(remind, audio.rate) + 4000) } } : {}),
     }));
   };
-  /** Read something out and show it on the TV for a while. Calling waits for it. */
+  /** Read something out and show it on the TV for a while. Calling pauses until the caller resumes. */
   const shoutOut = (text, kind) => {
     if (!text) return;
     unlockAudio();
@@ -234,7 +238,7 @@ function CallerInner({ event }) {
     setRun((r) => ({
       ...r,
       shout: { text, kind, until: Date.now() + Math.max(6000, ms + 3000) },
-      ...(r.phase === 'calling' ? { nextCallAt: Math.max(r.nextCallAt, Date.now() + ms + 1000) } : {}),
+      ...(r.phase === 'calling' ? { phase: 'paused', remaining: Math.max(0, r.nextCallAt - Date.now()) } : {}),
     }));
   };
   const clearShout = () => setRun((r) => ({ ...r, shout: null }));
@@ -283,6 +287,11 @@ function CallerInner({ event }) {
   const confirmWin = (announce = true) => {
     if (announce && audio.announce) say('We have a winner! Congratulations.');
     setRun((r) => ({ ...r, phase: 'over', nextCallAt: null }));
+  };
+  /** More than one card won: end the game and announce the tie breaker. */
+  const tiebreak = () => {
+    if (audio.enabled) say(tiebreakerMessage);
+    setRun((r) => ({ ...r, phase: 'over', nextCallAt: null, tiebreak: true, shout: null }));
   };
   const sayAgain = () => latest && announceNumber(latest, undefined, run.phase === 'prize' ? prizeMessage : '');
   /** Call the next number straight away. While paused (or before starting) it steps one number at a time. */
@@ -442,11 +451,17 @@ function CallerInner({ event }) {
                   {run.phase === 'calling' && `Next number in ${Math.max(0, Math.ceil((run.nextCallAt - now) / 1000))}s`}
                   {run.phase === 'paused' && 'Paused'}
                   {run.phase === 'bingo' && 'Bingo called. Check the card against the board.'}
-                  {run.phase === 'over' && (left === 0 ? 'Every number in play has been called.' : 'Game over.')}
+                  {run.phase === 'over' && (run.tiebreak ? 'Multiple winners: time for the tie breaker.' : left === 0 ? 'Every number in play has been called.' : 'Game over.')}
                   {run.phase === 'limit' && `That's all ${limit} numbers.`}
                   {run.phase === 'prize' && 'O 69: special prize!'}
                 </p>
                 {run.phase === 'prize' && <p className="prize-banner">{prizeMessage}</p>}
+                {run.phase === 'over' && run.tiebreak && (
+                  <div className="row">
+                    <p className="prize-banner">{tiebreakerMessage}</p>
+                    <button className="btn btn--quiet" onClick={() => audio.enabled && say(tiebreakerMessage)} disabled={!audio.enabled}>Say it again</button>
+                  </div>
+                )}
                 <p className="muted">
                   {limit != null
                     ? `${run.called.length} of ${limit} called${(run.extra || 0) > 0 ? ` (${run.extra} added)` : ''}, ${left} left in play`
@@ -471,12 +486,17 @@ function CallerInner({ event }) {
                   {run.phase === 'bingo' && (
                     <>
                       <button className="btn btn--primary btn--big" onClick={() => confirmWin()}>It's a winner, end game</button>
-                      <button className="btn btn--big" onClick={() => falseAlarm()}>Not a winner, keep calling</button>
-                      {falseLines.length > 0 && (
-                        <button className="btn btn--big" onClick={() => falseAlarm(true)} title="Reads a random reply from the event's not-a-bingo list">
-                          Not a winner, with a cheeky reply
-                        </button>
+                      {tiebreakerOn && (
+                        <button className="btn btn--primary btn--big" onClick={tiebreak}>Multiple winners, it's time for the tie breaker!</button>
                       )}
+                      <div className="row bingo-misses">
+                        <button className="btn btn--big" onClick={() => falseAlarm()}>Not a winner, keep calling</button>
+                        {falseLines.length > 0 && (
+                          <button className="btn btn--big" onClick={() => falseAlarm(true)} title="Reads a random reply from the event's not-a-bingo list">
+                            Not a winner, with a cheeky reply
+                          </button>
+                        )}
+                      </div>
                     </>
                   )}
                   {run.phase === 'over' && (

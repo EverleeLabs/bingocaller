@@ -5,7 +5,7 @@ import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.js
 import { themeStyle } from '../lib/theme.js';
 import ThemeEditor from '../components/ThemeEditor.jsx';
 import RepliesEditor from '../components/RepliesEditor.jsx';
-import { REMINDER_PLACEHOLDER } from '../lib/quips.js';
+import { REMINDER_PLACEHOLDER, DEFAULT_TIEBREAKER_MESSAGE } from '../lib/quips.js';
 import { navigate } from '../App.jsx';
 
 export default function EventEditor({ id }) {
@@ -96,6 +96,32 @@ export default function EventEditor({ id }) {
           Read out when you start each game, before the first number, and shown on the TV while players get ready. Repeat it any time
           from the caller screen. Leave blank for no reminder.
         </p>
+        <label className="switch extras__gap">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={!!event.tiebreaker?.enabled}
+            onChange={(e) => set({ tiebreaker: { message: '', ...event.tiebreaker, enabled: e.target.checked } })}
+          />
+          <span className="switch__track" aria-hidden />
+          <span>Tie breaker if there are multiple winners</span>
+        </label>
+        {event.tiebreaker?.enabled && (
+          <>
+            <label className="field">
+              <span className="field__label">Tie breaker announcement</span>
+              <input
+                value={event.tiebreaker.message ?? ''}
+                placeholder={DEFAULT_TIEBREAKER_MESSAGE}
+                onChange={(e) => set({ tiebreaker: { ...event.tiebreaker, message: e.target.value } })}
+              />
+            </label>
+            <p className="muted">
+              When a bingo is checked, the caller gets a <strong>Multiple winners</strong> button beside <strong>It's a winner</strong>. It ends
+              the game, reads this out and shows "Tie breaker!" on the TV. Leave blank to use the wording shown.
+            </p>
+          </>
+        )}
       </section>
 
       <RepliesEditor event={event} />

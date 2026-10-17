@@ -2,15 +2,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { pickLine, falseBingoLines, quipBanks, speechMs, cleanBanks, DEFAULT_FALSE_BINGO, DEFAULT_BANKS } from './quips.js';
 
+test('no replies until the event switches them on', () => {
+  assert.deepEqual(falseBingoLines({}), []);
+  assert.deepEqual(quipBanks({ quipBanks: [{ id: 'b', name: 'B', lines: ['Hush'] }] }), []);
+});
+
 test('built-in replies are used until the event changes them', () => {
-  assert.deepEqual(falseBingoLines({}), DEFAULT_FALSE_BINGO);
-  assert.deepEqual(falseBingoLines({ falseBingoReplies: ['  Nope. ', '', '   '] }), ['Nope.']);
-  assert.deepEqual(falseBingoLines({ falseBingoReplies: [] }), []);
-  assert.equal(quipBanks({}).length, DEFAULT_BANKS.length);
+  const on = { cheekyReplies: true };
+  assert.deepEqual(falseBingoLines(on), DEFAULT_FALSE_BINGO);
+  assert.deepEqual(falseBingoLines({ ...on, falseBingoReplies: ['  Nope. ', '', '   '] }), ['Nope.']);
+  assert.deepEqual(falseBingoLines({ ...on, falseBingoReplies: [] }), []);
+  assert.equal(quipBanks(on).length, DEFAULT_BANKS.length);
 });
 
 test('empty banks are left out', () => {
-  const banks = quipBanks({ quipBanks: [{ id: 'a', name: 'A', lines: ['', ' '] }, { id: 'b', name: 'B', lines: ['Hush'] }] });
+  const banks = quipBanks({ cheekyReplies: true, quipBanks: [{ id: 'a', name: 'A', lines: ['', ' '] }, { id: 'b', name: 'B', lines: ['Hush'] }] });
   assert.deepEqual(banks, [{ id: 'b', name: 'B', lines: ['Hush'] }]);
 });
 

@@ -22,7 +22,6 @@ export const DEFAULT_BANKS = [
     lines: [
       "If you can hear me, you're too quiet. If you can't, you're too loud.",
       "Inside voices, please. The balls can't hear themselves think.",
-      "Shh. Money is being won here.",
       'Save the chat for the intermission. Daub now, gossip later.',
       "I'll wait.",
       "Some of us came to win, not to hear about your neighbour's hedge.",
@@ -42,14 +41,19 @@ export const DEFAULT_BANKS = [
   },
 ];
 
+export const DEFAULT_TIEBREAKER_MESSAGE = "We have more than one winner! It's time for the tie breaker game.";
+
 export const REMINDER_PLACEHOLDER = 'Phones on silent, please, and shout "Bingo!" nice and loud.';
 
-/** The event's not-a-bingo replies, blank lines dropped. */
-export const falseBingoLines = (event) => usable(event?.falseBingoReplies ?? DEFAULT_FALSE_BINGO);
+/** Cheeky replies are off until the event switches them on. */
+export const repliesOn = (event) => event?.cheekyReplies === true;
 
-/** The event's in-game banks, each with its blank lines dropped. Empty banks are left out. */
+/** The event's not-a-bingo replies, blank lines dropped. None while replies are off. */
+export const falseBingoLines = (event) => (repliesOn(event) ? usable(event.falseBingoReplies ?? DEFAULT_FALSE_BINGO) : []);
+
+/** The event's in-game banks, each with its blank lines dropped. Empty banks are left out, and all of them while replies are off. */
 export const quipBanks = (event) =>
-  (event?.quipBanks ?? DEFAULT_BANKS).map((b) => ({ ...b, lines: usable(b.lines) })).filter((b) => b.lines.length);
+  (repliesOn(event) ? event.quipBanks ?? DEFAULT_BANKS : []).map((b) => ({ ...b, lines: usable(b.lines) })).filter((b) => b.lines.length);
 
 const usable = (lines) => (Array.isArray(lines) ? lines.map((l) => String(l).trim()).filter(Boolean) : []);
 
