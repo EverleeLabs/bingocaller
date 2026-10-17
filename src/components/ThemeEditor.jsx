@@ -1,15 +1,18 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { updateEvent, uid } from '../lib/store.js';
 import {
-  DEFAULT_THEME, FONTS, LOGO_PLACES, LOGO_SIZES, BUILT_IN_SETS,
-  cleanTheme, pruneImages, themePictures, themeStyle, themeWarnings, shrinkImage, shrinkLogo,
+  DEFAULT_THEME, FONTS, LOGO_PLACES, LOGO_SIZE, BUILT_IN_SETS, PICTURE_KEYS, isCornerPlace,
+  cleanTheme, pruneImages, themePictures, themeStyle, themeWarnings, shrinkImage, shrinkLogo, cropLogo, trimBounds,
 } from '../lib/theme.js';
+import LogoCropper from './LogoCropper.jsx';
+import { suggestThemes, analysePicture } from '../lib/suggest.js';
 import { useSavedSets, saveSet, deleteSet } from '../lib/palettes.js';
 import { LETTERS } from '../lib/patterns.js';
-import { Ball, Brand } from './Bingo.jsx';
+import { Ball, Brand, CornerLogo } from './Bingo.jsx';
 
 const OUT_OF_ROOM = 'This browser is out of room to save that picture. Try a smaller picture.';
 const RESET = 'Back to the standard colour';
+const LOGO_KEYS = ['logo', 'logoSource', 'logoCrop', 'logoPlace', 'logoSize'];
 
 /**
  * The event's colours, pictures and font, used on every screen of the event
@@ -21,6 +24,9 @@ export default function ThemeEditor({ event }) {
   const custom = Object.keys(theme).length > 0;
   const [error, setError] = useState('');
   const [open, setOpen] = useState(custom);
+  const [cropping, setCropping] = useState(null); // { src, crop, sourceId } while the crop dialog is open
+  const [undo, setUndo] = useState(null); // the theme before the last suggestion or fix
+  const stats = usePictureStats(pictures.image);
 
   /** Change the event's theme. `fn` gets the latest saved theme so quick changes don't overwrite each other. */
   const write = (fn, newImages) =>
@@ -35,7 +41,13 @@ export default function ThemeEditor({ event }) {
   const addPicture = async (kind, file) => {
     setError('');
     try {
-      const data = kind === 'logo' ? await shrinkLogo(file) : await shrinkImage(file, theme.bg || DEFAULT_THEME.bg);
+      if (kind === 'logo') {
+        // A new logo goes through the crop dialog first, already trimmed to its edges.
+        const src = await shrinkLogo(file);
+        setCropping({ src, crop: await trimBounds(src), sourceId: null });
+        return;
+      }
+      const data = await shrinkImage(file, theme.bg || DEFAULT_THEME.bg);
       const id = uid();
       if (!write((t) => ({ ...t, [kind]: id }), { [id]: data })) {
         write((t) => ({ ...t, [kind]: null }));
@@ -46,13 +58,34 @@ export default function ThemeEditor({ event }) {
     }
   };
 
+  /** Re-crop the current logo, starting from the original upload when there is one. */
+  const editCrop = () => {
+    const sourceId = theme.logoSource || theme.logo;
+    setCropping({ src: event.images?.[sourceId], crop: theme.logoSource ? theme.logoCrop : undefined, sourceId });
+  };
+  const saveCrop = async (rect) => {
+    setError('');
+    const { src, sourceId } = cropping;
+    const cropped = await cropLogo(src, rect);
+    const logoId = uid();
+    const srcId = sourceId || uid();
+    const newImages = { [logoId]: cropped, ...(sourceId ? {} : { [srcId]: src }) };
+    let ok = write((t) => ({ ...t, logo: logoId, logoSource: srcId, logoCrop: rect }), newImages);
+    if (!ok) ok = write((t) => ({ ...t, logo: logoId, logoSource: null, logoCrop: null }), { [logoId]: cropped }); // no room for the original
+    if (!ok) {
+      write(() => theme);
+      setError(OUT_OF_ROOM);
+    }
+    setCropping(null);
+  };
+
   /** Use a colour set. The event's logo stays unless the set has its own. */
   const applySet = (set) => {
     if (custom && !confirm(`Replace this event's colours with “${set.name}”?`)) return;
     setError('');
     const t = { ...set.theme };
     const newImages = {};
-    for (const k of ['image', 'logo']) {
+    for (const k of PICTURE_KEYS) {
       const data = t[k] && set.images?.[t[k]];
       if (data) {
         const id = uid();
@@ -60,14 +93,21 @@ export default function ThemeEditor({ event }) {
         t[k] = id;
       } else delete t[k];
     }
-    const ok = write((cur) => ({ ...t, ...(t.logo ? {} : { logo: cur.logo, logoPlace: cur.logoPlace, logoSize: cur.logoSize }) }), newImages);
+    const keepLogo = (cur) => Object.fromEntries(LOGO_KEYS.map((k) => [k, cur[k]]));
+    const ok = write((cur) => ({ ...t, ...(t.logo ? {} : keepLogo(cur)) }), newImages);
     if (!ok) {
       write(() => theme);
       setError(OUT_OF_ROOM);
     }
   };
 
-  const warnings = themeWarnings(theme);
+  const warnings = themeWarnings(theme, stats);
+  const suggestions = theme.bg || (pictures.image && stats) ? suggestThemes(theme, stats) : [];
+  /** Apply a suggestion or a fix, remembering the theme before so it can be undone. */
+  const applyPatch = (patch) => {
+    setUndo(theme);
+    write((t) => ({ ...t, ...patch }));
+  };
   const color = (label, key) => (
     <ColorField label={label} value={theme[key]} fallback={DEFAULT_THEME[key]} onChange={(v) => setKey(key, v)} />
   );
@@ -84,6 +124,7 @@ export default function ThemeEditor({ event }) {
       <div className="theme__body">
         <div className="theme__side">
           <ThemePreview theme={theme} pictures={pictures} title={event.items.find((i) => i.type === 'game')?.name || 'Game 1'} eventName={event.name} />
+          <ButtonPreview theme={theme} />
           <ColourSets onApply={applySet} />
         </div>
 
@@ -96,6 +137,10 @@ export default function ThemeEditor({ event }) {
               <RangeField
                 label="Fade the picture"
                 value={theme.dim ?? DEFAULT_THEME.dim}
+                min={0}
+                max={90}
+                step={5}
+                format={(n) => `${n}%`}
                 onChange={(n) => setKey('dim', n)}
                 hint="Tints the picture with the background colour so the board stays readable."
               />
@@ -109,6 +154,30 @@ export default function ThemeEditor({ event }) {
               {color('Pattern squares', 'accent')}
             </div>
           </fieldset>
+
+          {suggestions.length > 0 && (
+            <div className="suggest">
+              <p className="field__label">Suggested colours for {pictures.image ? 'your picture' : 'this background'}</p>
+              <div className="suggest__list">
+                {suggestions.map((s) => (
+                  <button key={s.id} type="button" className="suggest__pick" onClick={() => applyPatch(s.patch)} title="Sets the text, highlight, ball and button colours. Everything stays easy to read.">
+                    <span className="suggest__swatch" style={{ background: s.patch.bg, color: s.patch.text }}>
+                      Aa
+                      {s.patch.balls.map((b, c) => (
+                        <i key={c} style={{ background: b.bg }} />
+                      ))}
+                    </span>
+                    {s.name}
+                  </button>
+                ))}
+                {undo && (
+                  <button type="button" className="btn btn--quiet" onClick={() => (write(() => undo), setUndo(null))}>
+                    Undo
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           <fieldset className="theme__group">
             <legend className="field__label">Balls and called numbers</legend>
@@ -134,6 +203,15 @@ export default function ThemeEditor({ event }) {
           </fieldset>
 
           <fieldset className="theme__group">
+            <legend className="field__label">Caller buttons</legend>
+            <div className="theme__row">
+              {color('Main buttons', 'button')}
+              {color('Bingo button', 'bingo')}
+            </div>
+            <p className="muted">Start, Pause, Resume and the other caller buttons, and the Bingo buttons. The Bingo colour is also used for the Bingo and prize banners on the TV. Text on the buttons is picked automatically so it stays readable.</p>
+          </fieldset>
+
+          <fieldset className="theme__group">
             <legend className="field__label">Font for the board and balls</legend>
             <div className="fonts">
               {Object.entries(FONTS).map(([key, f]) => {
@@ -150,23 +228,44 @@ export default function ThemeEditor({ event }) {
 
           <fieldset className="theme__group">
             <legend className="field__label">Logo</legend>
-            <PictureField kind="logo" label="logo" data={pictures.logo} onAdd={(f) => addPicture('logo', f)} onRemove={() => setKey('logo', null)} />
+            <PictureField
+              kind="logo"
+              label="logo"
+              data={pictures.logo}
+              onAdd={(f) => addPicture('logo', f)}
+              onRemove={() => write((t) => ({ ...t, logo: null, logoSource: null, logoCrop: null }))}
+              extra={pictures.logo && <button type="button" className="btn btn--quiet" onClick={editCrop}>Crop logo</button>}
+            />
             {pictures.logo ? (
-              <div className="theme__row">
+              <div className="theme__row theme__row--top">
                 <Choice label="Where" options={LOGO_PLACES} value={theme.logoPlace || DEFAULT_THEME.logoPlace} onChange={(v) => setKey('logoPlace', v)} />
-                <Choice label="Size" options={LOGO_SIZES} value={theme.logoSize || DEFAULT_THEME.logoSize} onChange={(v) => setKey('logoSize', v)} />
+                <RangeField
+                  label="Size"
+                  min={LOGO_SIZE.min}
+                  max={LOGO_SIZE.max}
+                  step={1}
+                  value={theme.logoSize ?? DEFAULT_THEME.logoSize}
+                  format={(n) => `${n}% of the screen height`}
+                  onChange={(n) => setKey('logoSize', n)}
+                />
               </div>
             ) : (
-              <p className="muted">Shown at the top of the TV board, and above the event name on intermissions and the end screen. A PNG with a see-through background looks best.</p>
+              <p className="muted">Shown with the event name on the TV board, intermissions and the end screen, or in a corner. You can crop it after choosing it. A PNG with a see-through background looks best.</p>
             )}
+            {cropping && <LogoCropper src={cropping.src} crop={cropping.crop} onCancel={() => setCropping(null)} onSave={saveCrop} />}
           </fieldset>
 
-          {warnings.length > 0 && (
-            <div className="warn" role="status">
+          {warnings.length > 0 ? (
+            <div className="warn check" role="status">
               {warnings.map((w) => (
-                <p key={w}>{w}</p>
+                <p key={w.message} className="check__item">
+                  <span>{w.message}</span>
+                  <button type="button" className="btn" onClick={() => applyPatch(w.fix.patch)}>{w.fix.label}</button>
+                </p>
               ))}
             </div>
+          ) : (
+            custom && <p className="check--ok" role="status">✓ Everything is easy to read from across the room.</p>
           )}
           {error && <p className="warn" role="alert">{error}</p>}
 
@@ -243,7 +342,7 @@ function SaveSet({ theme, images }) {
 }
 
 /** Add, change or remove a picture. */
-function PictureField({ kind, label, data, onAdd, onRemove }) {
+function PictureField({ kind, label, data, onAdd, onRemove, extra }) {
   const ref = useRef(null);
   const [busy, setBusy] = useState(false);
   const pick = async (file) => {
@@ -260,6 +359,7 @@ function PictureField({ kind, label, data, onAdd, onRemove }) {
       <button type="button" className="btn btn--quiet" disabled={busy} onClick={() => ref.current?.click()}>
         {busy ? 'Adding…' : data ? `Change ${label}` : `Add a ${label}`}
       </button>
+      {extra}
       {data && (
         <button type="button" className="btn btn--quiet" onClick={onRemove}>
           Remove {label}
@@ -282,14 +382,46 @@ function Choice({ label, options, value, onChange }) {
   );
 }
 
+/** Look at the background picture (for suggestions and the readability check). */
+function usePictureStats(image) {
+  const [stats, setStats] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setStats(null);
+    if (image) analysePicture(image).then((s) => live && setStats(s)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [image]);
+  return stats;
+}
+
+/** The caller's buttons in these colours. */
+function ButtonPreview({ theme }) {
+  return (
+    <div className="btnprev themed-controls" style={themeStyle(theme)} aria-hidden>
+      <span className="btnprev__label">Caller buttons</span>
+      <span className="btn btn--primary">Resume calling</span>
+      <span className="btn">Pause</span>
+      <span className="btn btn--bingo">Bingo!</span>
+    </div>
+  );
+}
+
 /** A small mock of the TV board in these colours. */
 function ThemePreview({ theme, pictures, title, eventName }) {
   return (
-    <div className={`tvprev${pictures.image ? ' has-image' : ''}`} style={themeStyle(theme, pictures.image)} aria-label="Preview of the TV board" role="img">
+    <div
+      className={`tvprev${pictures.image ? ' has-image' : ''}${pictures.logo && isCornerPlace(theme.logoPlace) ? ` tvprev--corner-${theme.logoPlace}` : ''}`}
+      style={themeStyle(theme, pictures.image)}
+      aria-label="Preview of the TV board"
+      role="img"
+    >
       <div className="tvprev__head">
         <strong>{title}</strong>
         <Brand logo={pictures.logo} theme={theme} eventName={eventName} className="tvprev__brand" />
       </div>
+      <CornerLogo logo={pictures.logo} theme={theme} />
       <div className="tvprev__balls">
         {[7, 22, 41, 53, 69].map((n) => (
           <Ball key={n} n={n} size="sm" />
@@ -345,20 +477,20 @@ function ColorField({ label, value, fallback, onChange, hideLabel = false }) {
   );
 }
 
-function RangeField({ label, value, onChange, hint }) {
+function RangeField({ label, value, min, max, step, format, onChange, hint }) {
   const [draft, setDraft] = useState(null);
   const commit = useThrottled(onChange, 120);
   const shown = draft ?? value;
   return (
     <label className="field theme__range">
       <span className="field__label">
-        {label}: {shown}%
+        {label}: {format(shown)}
       </span>
       <input
         type="range"
-        min={0}
-        max={90}
-        step={5}
+        min={min}
+        max={max}
+        step={step}
         value={shown}
         onChange={(e) => {
           const n = Number(e.target.value);
@@ -367,7 +499,7 @@ function RangeField({ label, value, onChange, hint }) {
         }}
         onBlur={() => setDraft(null)}
       />
-      <span className="muted">{hint}</span>
+      {hint && <span className="muted">{hint}</span>}
     </label>
   );
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanTheme, pruneImages, themeStyle, contrast, themeWarnings, themePictures } from './theme.js';
+import { cleanTheme, pruneImages, themeStyle, contrast, themeWarnings, themePictures, cleanCrop, resizeCrop } from './theme.js';
 
 test('an empty theme means the standard look', () => {
   assert.equal(cleanTheme({}), undefined);
@@ -31,13 +31,26 @@ test('contrast warnings', () => {
 });
 
 test('picture ids resolve to their data', () => {
-  assert.deepEqual(themePictures({ image: 'p', logo: 'gone' }, { p: 'data:p' }), { image: 'data:p', logo: null });
-  assert.deepEqual(themePictures(undefined, undefined), { image: null, logo: null });
+  assert.deepEqual(themePictures({ image: 'p', logo: 'gone' }, { p: 'data:p' }), { image: 'data:p', logo: null, logoSource: null });
+  assert.deepEqual(themePictures(undefined, undefined), { image: null, logo: null, logoSource: null });
 });
 
 test('logo and font settings are kept only when valid', () => {
-  assert.deepEqual(cleanTheme({ logo: 'abc', logoPlace: 'instead', logoSize: 'xl', font: 'rounded' }), { logo: 'abc', logoPlace: 'instead', font: 'rounded' });
+  assert.deepEqual(cleanTheme({ logo: 'abc', logoPlace: 'top-right', logoSize: 'xl', font: 'rounded' }), { logo: 'abc', logoPlace: 'top-right', font: 'rounded' });
+  assert.equal(cleanTheme({ logoSize: 99 }).logoSize, 30);
+  assert.equal(cleanTheme({ logoSize: 's' }).logoSize, 8);
+  assert.equal(cleanTheme({ logoPlace: 'middle' }), undefined);
   assert.equal(cleanTheme({ font: 'comic-sans' }), undefined);
   assert.equal(themeStyle({ font: 'standard' })['--tv-font'], undefined);
   assert.match(themeStyle({ font: 'rounded' })['--tv-font'], /Fredoka/);
+});
+
+test('crops stay inside the picture', () => {
+  assert.deepEqual(cleanCrop({ x: -1, y: 0.5, w: 3, h: 0.25 }), { x: 0, y: 0.5, w: 1, h: 0.25 });
+  assert.equal(cleanCrop({ x: 0 }), undefined);
+  const r = { x: 0.2, y: 0.2, w: 0.5, h: 0.5 };
+  assert.deepEqual(resizeCrop(r, 'move', 0.5, -0.5), { x: 0.5, y: 0, w: 0.5, h: 0.5 });
+  const nw = resizeCrop(r, 'nw', -0.1, 0.1);
+  assert.deepEqual([nw.x, nw.y, nw.w, nw.h].map((n) => +n.toFixed(4)), [0.1, 0.3, 0.6, 0.4]);
+  assert.equal(resizeCrop(r, 'e', -1, 0).w, 0.04);
 });

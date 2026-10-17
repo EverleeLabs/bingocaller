@@ -48,7 +48,7 @@ test('keeps the event colours and pictures, drops bad ones', () => {
     },
     { id: 'f', name: 'Missing picture', items: [], theme: { image: 'missing', text: '#ffffff' } },
   ]));
-  assert.deepEqual(events[0].theme, { bg: '#112233', balls: [{ bg: '#ff0000' }, {}, {}, {}, { text: '#000000' }], image: 'p1', dim: 90, logo: 'l1', logoSize: 'l', font: 'rounded' });
+  assert.deepEqual(events[0].theme, { bg: '#112233', balls: [{ bg: '#ff0000' }, {}, {}, {}, { text: '#000000' }], image: 'p1', dim: 90, logo: 'l1', logoSize: 18, font: 'rounded' });
   assert.deepEqual(events[0].images, { p1: pic, l1: logo });
   assert.equal(events[0].items[0].theme, undefined);
   assert.deepEqual(events[1].theme, { text: '#ffffff' });

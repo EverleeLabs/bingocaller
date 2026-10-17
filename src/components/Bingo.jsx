@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FREE, LETTERS, letterOf, columnOf } from '../lib/patterns.js';
-import { DEFAULT_THEME } from '../lib/theme.js';
+import { DEFAULT_THEME, isCornerPlace } from '../lib/theme.js';
 
 /**
  * 5x5 card. `marked` = Set of cell indexes. `alt` = Set of squares used by
@@ -125,14 +125,23 @@ export function PatternSet({ patterns, size = 'md' }) {
   );
 }
 
-/** The logo and/or event name, as the TV shows them. */
+const logoSizeStyle = (theme) => ({ '--logo-size': theme?.logoSize ?? DEFAULT_THEME.logoSize });
+
+/** The event name with the logo before, after, above or instead of it, as the TV shows them. */
 export function Brand({ logo, theme, eventName, className = '' }) {
   const place = theme?.logoPlace || DEFAULT_THEME.logoPlace;
-  const size = theme?.logoSize || DEFAULT_THEME.logoSize;
+  const inline = logo && !isCornerPlace(place) ? place : null;
   return (
-    <div className={`brand brand--${size}${logo && place === 'instead' ? ' brand--only' : ''} ${className}`}>
-      {logo && <img className="brand__logo" src={logo} alt={place === 'instead' ? eventName : ''} />}
-      {!(logo && place === 'instead') && <span className="tv__event">{eventName}</span>}
+    <div className={`brand${inline ? ` brand--${inline}` : ''} ${className}`} style={logoSizeStyle(theme)}>
+      {inline && <img className="brand__logo" src={logo} alt={inline === 'instead' ? eventName : ''} />}
+      {inline !== 'instead' && <span className="tv__event">{eventName}</span>}
     </div>
   );
+}
+
+/** The logo pinned to a corner of the screen, when that's where it goes. */
+export function CornerLogo({ logo, theme }) {
+  const place = theme?.logoPlace || DEFAULT_THEME.logoPlace;
+  if (!logo || !isCornerPlace(place)) return null;
+  return <img className={`corner-logo corner-logo--${place}`} src={logo} alt="" style={logoSizeStyle(theme)} />;
 }

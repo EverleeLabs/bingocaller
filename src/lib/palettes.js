@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { cleanTheme, themePictures } from './theme.js';
+import { cleanTheme, themePictures, PICTURE_KEYS } from './theme.js';
 import { uid } from './store.js';
 
 // Colour sets the host saved to reuse in any event, kept in this browser.
@@ -46,7 +46,7 @@ export function saveSet(name, theme, eventImages) {
   const pics = themePictures(theme, eventImages);
   const images = {};
   const t = { ...theme };
-  for (const k of ['image', 'logo']) {
+  for (const k of PICTURE_KEYS) {
     if (pics[k]) {
       images[t[k]] = pics[k];
     } else delete t[k];

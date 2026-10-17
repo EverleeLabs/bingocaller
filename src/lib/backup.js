@@ -1,11 +1,12 @@
 // Export events to a file and read them back in.
-import { cleanTheme, pruneImages } from './theme.js';
+import { cleanTheme, pruneImages, PICTURE_KEYS } from './theme.js';
 
 /** Drop picture references whose picture isn't in the file. */
 function keepKnownPictures(theme, images) {
   if (!theme) return undefined;
   const t = { ...theme };
-  for (const k of ['image', 'logo']) if (t[k] && !images?.[t[k]]) delete t[k];
+  for (const k of PICTURE_KEYS) if (t[k] && !images?.[t[k]]) delete t[k];
+  if (!t.logoSource) delete t.logoCrop;
   return cleanTheme(t);
 }
 

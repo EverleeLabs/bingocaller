@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useScreen, useNow } from '../lib/sync.js';
-import { Board, Ball, PatternSet, Brand, fmtClock } from '../components/Bingo.jsx';
+import { Board, Ball, PatternSet, Brand, CornerLogo, fmtClock } from '../components/Bingo.jsx';
 import { letterOf } from '../lib/patterns.js';
 import { themeStyle } from '../lib/theme.js';
 
@@ -22,6 +22,7 @@ export default function Display() {
       <button className="tv__fs" onClick={toggleFullscreen}>
         {document.fullscreenElement ? 'Exit full screen' : 'Full screen'}
       </button>
+      {screen && <CornerLogo logo={screen.themeLogo} theme={screen.theme} />}
       {!screen && <Waiting />}
       {screen?.kind === 'game' && <GameScreen s={screen} now={now} />}
       {screen?.kind === 'break' && <BreakScreen s={screen} now={now} />}

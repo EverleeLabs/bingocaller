@@ -330,7 +330,7 @@ function CallerInner({ event }) {
         </ol>
       </aside>
 
-      <main className="caller__main">
+      <main className="caller__main themed-controls" style={themeStyle(theme, themeImage)}>
         {run.phase === 'end' && (
           <section className="stage stage--center">
             <h2 className="stage__title">That's the end of {event.name}</h2>
@@ -360,7 +360,7 @@ function CallerInner({ event }) {
         )}
 
         {isGame && (
-          <section className="stage" style={themeStyle(theme, themeImage)}>
+          <section className="stage">
             <div className="stage__head">
               <div>
                 <p className="muted">Item {run.index + 1} of {event.items.length}</p>
@@ -369,7 +369,13 @@ function CallerInner({ event }) {
                   {patternName(item)} <ColumnChips activeCols={cols} />
                 </p>
               </div>
-              <PatternSet patterns={patternsForScreen(item)} size="sm" />
+              {hasSurface(theme) ? (
+                <div className={`tvboard tvboard--pattern${themeImage ? ' has-image' : ''}`} style={themeStyle(theme, themeImage)}>
+                  <PatternSet patterns={patternsForScreen(item)} size="sm" />
+                </div>
+              ) : (
+                <PatternSet patterns={patternsForScreen(item)} size="sm" />
+              )}
             </div>
 
             {pool.length === 0 && (
