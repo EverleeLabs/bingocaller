@@ -333,7 +333,7 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
   grid-template-areas: 'bar bar' 'left right';
 }
 .tv__bar { grid-area: bar; display: grid; grid-template-columns: minmax(0, 32fr) minmax(0, 68fr); column-gap: 3vw; align-items: center; }
-.tv__game-info { display: flex; flex-direction: column; gap: 0.6vh; }
+.tv__game-info { display: flex; flex-direction: column; align-items: center; gap: 0.6vh; text-align: center; }
 .tv__event { font-size: 4.4vh; font-weight: 700; color: rgba(255, 255, 255, 0.8); }
 .tv__bar .tv__event { font-size: 7.5vh; font-weight: 900; font-variation-settings: 'wdth' 120; line-height: 1; color: #fff; text-align: center; }
 .tv__title { font-size: 5vh; font-weight: 800; font-variation-settings: 'wdth' 118; }
