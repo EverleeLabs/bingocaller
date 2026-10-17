@@ -14,6 +14,7 @@ A web app for running bingo events. Hosts plan the night's games (each with its 
 - **O 69 special prize (optional, switched on during a game)**: set the announcement in the event's setup (**O 69 prize announcement**), then turn on "Special prize on O 69" on the caller screen during any game where O is called. The wording can also be changed there and is saved with the event. If O 69 is called, calling pauses, the announcement is read out after the call, and the TV shows a "Special prize!" banner with the message until the caller taps Resume calling. The switch only appears in games where O numbers are called, resets for each game, and disappears once O 69 has been called and the game has moved on.
 - **Ending the event**: **End event** on the caller (any time), or **End the event** after the last game. The voice reads the event's **Closing message** (set in setup) and the TV shows "Thanks for playing" with that message.
 - **Spoken calls**: each number is read aloud ("G, 52. five, two. … G, 52.") with an optional chime, plus announcements for game starts, bingos and the end of intermissions. Voice, speed, volume and each option live under **Voice settings**, and **Say it again** repeats the last call. Auto-calling waits for the voice to finish so calls never overlap.
+- **Colours, logo and font (optional, per event)**: every event uses the standard look until you change it under **Colours, logo and font** in the event's setup. You can set the background colour or a background picture (with a fade slider so the board stays readable), the colour of all text, the pattern squares, each column's ball colour and the text on it (also used for called numbers on the board), the ball centre and number, a logo (next to or instead of the event name, in three sizes), and the font for the board and balls. A live preview shows the result and warns about hard-to-read colour pairs. The look applies to every screen of the event: games, intermissions and the end screen, on the TV and on the caller screen (balls, called numbers, chips and pattern squares, and the caller's board in the TV's background and text colours). Buttons and controls keep the standard look. **Colour sets** has ready-made looks, and **Save set** keeps your own (with its picture and logo) to reuse in any event. Pictures are shrunk to TV size before they're saved.
 - **TV display**: a separate full-screen board with the current ball, the last few calls, the pattern to win, and an intermission countdown.
 
 ## Run it locally
@@ -55,6 +56,8 @@ On the events page, **Export all** downloads every event as a `.json` file, and 
 | --- | --- |
 | `src/lib/patterns.js` | Win patterns, which columns are in play, the call pool |
 | `src/lib/store.js` | Saving events |
+| `src/lib/theme.js` | Event colours, logo and font: defaults, built-in sets, cleaning, CSS variables, contrast checks |
+| `src/lib/palettes.js` | Saved colour sets, reusable in any event |
 | `src/lib/backup.js` | Export and import files |
 | `src/lib/voice.js` | Spoken calls (browser text-to-speech) and the chime |
 | `src/lib/sync.js` | Caller → TV messaging, background-safe timer |

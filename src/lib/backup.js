@@ -1,4 +1,14 @@
 // Export events to a file and read them back in.
+import { cleanTheme, pruneImages } from './theme.js';
+
+/** Drop picture references whose picture isn't in the file. */
+function keepKnownPictures(theme, images) {
+  if (!theme) return undefined;
+  const t = { ...theme };
+  for (const k of ['image', 'logo']) if (t[k] && !images?.[t[k]]) delete t[k];
+  return cleanTheme(t);
+}
+
 // File format: { app: 'bingo-caller', version: 1, exportedAt, events: [...] }
 
 const APP = 'bingo-caller';
@@ -59,7 +69,10 @@ const id = (v) => (typeof v === 'string' && /^[\w-]{1,40}$/.test(v) ? v : Math.r
 /** Keep only the fields the app understands, with safe values. */
 function cleanEvent(raw) {
   if (!raw || typeof raw !== 'object' || !Array.isArray(raw.items)) return null;
+  const pictures = cleanImages(raw.images);
   const items = raw.items.map(cleanItem).filter(Boolean);
+  const theme = keepKnownPictures(cleanTheme(raw.theme), pictures);
+  const images = pruneImages(pictures, theme);
   return {
     id: id(raw.id),
     name: str(raw.name, 'Imported event'),
@@ -69,7 +82,18 @@ function cleanEvent(raw) {
     updatedAt: num(raw.updatedAt, 0, 9e15, Date.now()),
     ...(typeof raw.prizeMessage === 'string' ? { prizeMessage: raw.prizeMessage.slice(0, 200) } : {}),
     ...(typeof raw.endMessage === 'string' ? { endMessage: raw.endMessage.slice(0, 300) } : {}),
+    ...(theme ? { theme } : {}),
+    ...(images ? { images } : {}),
   };
+}
+
+/** Background pictures: { id: 'data:image/...;base64,...' }, a few MB at most. */
+function cleanImages(raw) {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const ok = Object.entries(raw)
+    .filter(([k, v]) => /^[\w-]{1,40}$/.test(k) && typeof v === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v) && v.length < 4_000_000)
+    .slice(0, 50);
+  return ok.length ? Object.fromEntries(ok) : undefined;
 }
 
 function cleanItem(raw) {

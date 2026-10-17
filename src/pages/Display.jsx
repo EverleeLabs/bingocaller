@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useScreen, useNow } from '../lib/sync.js';
-import { Board, Ball, PatternSet, fmtClock } from '../components/Bingo.jsx';
+import { Board, Ball, PatternSet, Brand, fmtClock } from '../components/Bingo.jsx';
 import { letterOf } from '../lib/patterns.js';
+import { themeStyle } from '../lib/theme.js';
 
 export default function Display() {
   const screen = useScreen();
@@ -13,8 +14,11 @@ export default function Display() {
     document.title = screen?.eventName ? `${screen.eventName} board` : 'Bingo board';
   }, [screen?.eventName]);
 
+  // The event's colours (or the current game's own) on every screen.
+  const image = screen?.themeImage;
+
   return (
-    <div className={`tv${idle ? ' is-idle' : ''}`}>
+    <div className={`tv${idle ? ' is-idle' : ''}${image ? ' has-image' : ''}`} style={screen ? themeStyle(screen.theme, image) : undefined}>
       <button className="tv__fs" onClick={toggleFullscreen}>
         {document.fullscreenElement ? 'Exit full screen' : 'Full screen'}
       </button>
@@ -23,7 +27,7 @@ export default function Display() {
       {screen?.kind === 'break' && <BreakScreen s={screen} now={now} />}
       {screen?.kind === 'end' && (
         <div className="tv__center">
-          <p className="tv__event">{screen.eventName}</p>
+          <Brand logo={screen.themeLogo} theme={screen.theme} eventName={screen.eventName} />
           <h1 className="tv__huge">Thanks for playing</h1>
           {screen.endMessage && <p className="tv__sub">{screen.endMessage}</p>}
         </div>
@@ -58,7 +62,7 @@ function GameScreen({ s, now }) {
               : `${s.called.length} ${s.called.length === 1 ? 'number' : 'numbers'} called${s.untilBingo ? ', playing until a bingo' : ''}`}
           </span>
         </div>
-        <span className="tv__event">{s.eventName}</span>
+        <Brand logo={s.themeLogo} theme={s.theme} eventName={s.eventName} />
       </header>
 
       <section className="tv__left">
@@ -113,7 +117,7 @@ function BreakScreen({ s, now }) {
   const left = s.endsAt - now;
   return (
     <div className="tv__center">
-      <p className="tv__event">{s.eventName}</p>
+      <Brand logo={s.themeLogo} theme={s.theme} eventName={s.eventName} />
       <h1 className="tv__title">{s.title}</h1>
       <p className="tv__clock">{left > 0 ? fmtClock(left) : 'Starting soon'}</p>
       {s.message && <p className="tv__sub">{s.message}</p>}

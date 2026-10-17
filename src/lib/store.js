@@ -15,14 +15,17 @@ function load() {
   }
 }
 
+/** Returns false if the browser couldn't store it (usually full). */
 function save(next) {
   cache = next;
+  let stored = true;
   try {
     localStorage.setItem(KEY, JSON.stringify(next));
   } catch {
-    /* storage full or blocked: keep working in memory */
+    stored = false; // storage full or blocked: keep working in memory
   }
   listeners.forEach((l) => l());
+  return stored;
 }
 
 window.addEventListener('storage', (e) => {
@@ -59,7 +62,7 @@ export function createEvent() {
 }
 
 export function updateEvent(id, patch) {
-  save(cache.map((e) => (e.id === id ? { ...e, ...(typeof patch === 'function' ? patch(e) : patch), updatedAt: Date.now() } : e)));
+  return save(cache.map((e) => (e.id === id ? { ...e, ...(typeof patch === 'function' ? patch(e) : patch), updatedAt: Date.now() } : e)));
 }
 
 export function deleteEvent(id) {

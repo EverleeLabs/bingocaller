@@ -36,3 +36,21 @@ test('cleans bad values and old single-pattern games', () => {
   assert.deepEqual(events[0].items[0].patternIds, ['stamp']);
   assert.deepEqual(events[0].items[0].custom, [[1, 2]]);
 });
+
+test('keeps the event colours and pictures, drops bad ones', () => {
+  const pic = 'data:image/jpeg;base64,AAAA';
+  const logo = 'data:image/png;base64,BBBB';
+  const { events } = parseBackup(file([
+    {
+      id: 'e', name: 'Themed', items: [{ id: 'g1', type: 'game', theme: { bg: '#000000' } }],
+      theme: { bg: '#112233', text: 'red', balls: [{ bg: '#FF0000' }, {}, {}, {}, { text: '#000000' }], image: 'p1', dim: 200, logo: 'l1', logoSize: 'l', font: 'rounded' },
+      images: { p1: pic, l1: logo, unused: pic, bad: 'javascript:alert(1)' },
+    },
+    { id: 'f', name: 'Missing picture', items: [], theme: { image: 'missing', text: '#ffffff' } },
+  ]));
+  assert.deepEqual(events[0].theme, { bg: '#112233', balls: [{ bg: '#ff0000' }, {}, {}, {}, { text: '#000000' }], image: 'p1', dim: 90, logo: 'l1', logoSize: 'l', font: 'rounded' });
+  assert.deepEqual(events[0].images, { p1: pic, l1: logo });
+  assert.equal(events[0].items[0].theme, undefined);
+  assert.deepEqual(events[1].theme, { text: '#ffffff' });
+  assert.equal(events[1].images, undefined);
+});

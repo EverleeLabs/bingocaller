@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useEvents, updateEvent, newGame, newBreak } from '../lib/store.js';
 import { PRESETS, variantsFor, activeColumns, previewCells, patternName, patternIdsOf, togglePatternId, selectedPatterns, callPool, parseAnnounceList, milestoneText, DEFAULT_PRIZE_MESSAGE, MILESTONE_PLACEHOLDER, COLUMN_PICK, columnPickOf, columnPickVariants, columnPickName, LETTERS, FREE } from '../lib/patterns.js';
 import { PatternGrid, CyclingPattern, ColumnChips } from '../components/Bingo.jsx';
+import { themeStyle } from '../lib/theme.js';
+import ThemeEditor from '../components/ThemeEditor.jsx';
 import { navigate } from '../App.jsx';
 
 export default function EventEditor({ id }) {
@@ -80,6 +82,8 @@ export default function EventEditor({ id }) {
         <p className="muted">Read out and shown on the TV when you end the event after the last game.</p>
       </section>
 
+      <ThemeEditor event={event} />
+
       <section className="stack">
         <div className="row row--between">
           <h2>Running order</h2>
@@ -115,7 +119,7 @@ export default function EventEditor({ id }) {
                 }}
                 onDragEnd={() => setDragIndex(null)}
               >
-                <div className="item__bar">
+                <div className="item__bar" style={themeStyle(event.theme)}>
                   <span className="item__grip" aria-hidden>⠿</span>
                   <span className="item__pos">{idx + 1}</span>
                   {isGame ? (

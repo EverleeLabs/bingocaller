@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { FREE, LETTERS, letterOf, columnOf } from '../lib/patterns.js';
+import { DEFAULT_THEME } from '../lib/theme.js';
 
 /**
  * 5x5 card. `marked` = Set of cell indexes. `alt` = Set of squares used by
@@ -121,5 +122,17 @@ export function PatternSet({ patterns, size = 'md' }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The logo and/or event name, as the TV shows them. */
+export function Brand({ logo, theme, eventName, className = '' }) {
+  const place = theme?.logoPlace || DEFAULT_THEME.logoPlace;
+  const size = theme?.logoSize || DEFAULT_THEME.logoSize;
+  return (
+    <div className={`brand brand--${size}${logo && place === 'instead' ? ' brand--only' : ''} ${className}`}>
+      {logo && <img className="brand__logo" src={logo} alt={place === 'instead' ? eventName : ''} />}
+      {!(logo && place === 'instead') && <span className="tv__event">{eventName}</span>}
+    </div>
   );
 }
