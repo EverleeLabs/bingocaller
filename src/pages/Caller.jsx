@@ -375,7 +375,7 @@ function CallerInner({ event }) {
                   <div className="console__recent">
                     <span className="console__recent-label">Before that</span>
                     <div className="console__recent-balls">
-                      {run.called.slice(-4, -1).reverse().map((n) => (
+                      {run.called.slice(-6, -1).reverse().map((n) => (
                         <Ball key={n} n={n} size="sm" />
                       ))}
                     </div>
