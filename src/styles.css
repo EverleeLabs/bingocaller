@@ -222,7 +222,7 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .ball--empty { background: transparent; box-shadow: inset 0 0 0 3px var(--line); }
 .ball--sm { --size: 56px; }
 .ball--lg { --size: 168px; }
-.ball--xl { --size: min(34vh, 24vw); }
+.ball--xl { --size: min(30vh, 22vw); }
 
 /* ---------- Board ---------- */
 .board { display: grid; gap: 4px; }
@@ -324,12 +324,12 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .tv { position: fixed; inset: 0; overflow: hidden; }
 .tv, .tvprev, .ball, .board, .chip { font-family: var(--tv-font, var(--font)); font-synthesis: none; }
 .tv.is-idle { cursor: none; }
-.tv__fs {
-  position: absolute; right: 16px; bottom: 16px; z-index: 2;
+.tv__controls { position: absolute; right: 16px; bottom: 16px; z-index: 2; display: flex; gap: 8px; transition: opacity 0.3s; }
+.tv__btn {
   padding: 8px 14px; border-radius: 999px; border: 1.5px solid color-mix(in srgb, var(--tv-text) 40%, transparent);
-  background: color-mix(in srgb, var(--tv-bg) 60%, transparent); color: var(--tv-text); cursor: pointer; transition: opacity 0.3s;
+  background: color-mix(in srgb, var(--tv-bg) 60%, transparent); color: var(--tv-text); font: inherit; cursor: pointer;
 }
-.tv.is-idle .tv__fs { opacity: 0; pointer-events: none; }
+.tv.is-idle .tv__controls { opacity: 0; pointer-events: none; }
 
 .tv__center { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2vh; padding: 5vw; text-align: center; }
 .tv__huge { font-size: 14vh; font-weight: 900; font-variation-settings: 'wdth' 125; line-height: 1; }
@@ -352,14 +352,9 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .tv__count { font-size: 2.6vh; font-weight: 600; color: color-mix(in srgb, var(--tv-text) 80%, transparent); font-variant-numeric: tabular-nums; }
 
 .tv__left { grid-area: left; display: flex; flex-direction: column; align-items: center; gap: 2.5vh; min-height: 0; }
-/* The ball gives up height when the notes, prize and pattern below need the room,
-   so the "To win" panel always fits on screen. */
-.tv__ballwrap {
-  align-self: stretch; display: flex; justify-content: center;
-  height: min(34vh, 24vw); min-height: 10vh; flex-shrink: 1; container-type: size;
-  animation: drop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1);
-}
-.tv__ballwrap .ball--xl { --size: min(34vh, 24vw, 100cqh); }
+/* The ball is the same size in every game. The "To win" panel below gives up
+   room instead (see .tv__patternbox), so it always fits on screen. */
+.tv__ballwrap { display: flex; justify-content: center; flex-shrink: 0; animation: drop 0.6s cubic-bezier(0.2, 1.4, 0.4, 1); }
 @keyframes drop {
   from { transform: translateY(-6vh) scale(0.85); opacity: 0; }
   to { transform: none; opacity: 1; }
@@ -372,10 +367,12 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
   font-size: 3.2vh; font-weight: 900; line-height: 1.1; white-space: nowrap; color: var(--bingo-ink, var(--ink));
   background: var(--bingo, var(--gold)); padding: 1.2vh 3vh; border-radius: 999px;
 }
-.tv__recent { display: flex; gap: 1vh; }
-.tv__recent .ball { --size: min(7vh, 5vw); }
-.tv__pattern { margin-top: auto; display: flex; align-items: center; gap: 2vw; padding: 2vh; border-radius: 1.5vh; background: color-mix(in srgb, var(--tv-text) 7%, transparent); }
-.tv__pattern .pgrid { --cell: min(4.4vh, 3vw); }
+.tv__recent { display: flex; gap: 1vh; flex-shrink: 0; }
+.tv__recent .ball { --size: min(8vh, 4.8vw); }
+/* Takes whatever height is left in the column; the pattern cards size to fit it. */
+.tv__patternbox { flex: 1 1 0; min-height: 0; align-self: stretch; display: flex; align-items: flex-end; container-type: size; }
+.tv__pattern { display: flex; align-items: center; gap: 2vw; padding: 2vh; border-radius: 1.5vh; background: color-mix(in srgb, var(--tv-text) 7%, transparent); }
+.tv__pattern .pgrid { --cell: min(4.4vh, 3vw, max(1vh, (100cqh - 17vh) / 6)); }
 .tv__pattern .pgrid__head { color: var(--tv-text); }
 .tv__pattern .pgrid__cell { background: color-mix(in srgb, var(--tv-text) 14%, transparent); }
 .tv__pattern .pgrid__cell.is-free { background: color-mix(in srgb, var(--tv-text) 22%, transparent); }
@@ -403,17 +400,31 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
   .tv__bar .brand { grid-row: 1; }
   .tv__bar .tv__event { font-size: 6vw; }
   .tv__left { flex-direction: row; flex-wrap: wrap; justify-content: center; }
-  .tv__pattern { margin-top: 0; }
+  .tv__patternbox { flex: none; align-self: auto; container-type: normal; }
   .ball--xl { --size: 26vw; }
-  .tv__ballwrap { align-self: auto; height: auto; min-height: 0; container-type: normal; }
-  .tv__ballwrap .ball--xl { --size: 26vw; }
   .board--xl { --cellh: 5vw; }
   .board--xl .board__num { font-size: 2.6vw; }
   .board--xl .board__letter { font-size: 3vw; }
 }
 
+/* Each new number fills the screen on its own for a moment, then fades to the board. */
+.tv__flash {
+  position: absolute; inset: 0; z-index: 10; display: grid; place-items: center;
+  background: radial-gradient(120% 90% at 20% 10%, var(--tv-bg-2), var(--tv-bg) 60%);
+}
+.tv.has-image .tv__flash { background: linear-gradient(var(--tv-veil), var(--tv-veil)), var(--tv-image) center / cover no-repeat, var(--tv-bg); }
+.tv__flash .ball--xl { --size: min(76vh, 64vw); animation: flash-in 0.5s cubic-bezier(0.2, 1.3, 0.4, 1); }
+.tv__flash.is-leaving { animation: flash-out 0.5s ease forwards; }
+.tv__flash.is-leaving .ball { transition: transform 0.5s ease; transform: scale(0.45); }
+@keyframes flash-in {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes flash-out { to { opacity: 0; } }
+
 @media (prefers-reduced-motion: reduce) {
-  .tv__ballwrap { animation: none; }
+  .tv__ballwrap, .tv__flash, .tv__flash .ball--xl { animation: none; }
+  .tv__flash.is-leaving { display: none; }
   .tv__progress span { transition: none; }
 }
 
@@ -464,13 +475,13 @@ button.pgrid__cell:hover:not(.is-on) { background: #f6c9da; }
 .pset--tv .pgrid { gap: 0.4vh; }
 .pset--tv .pgrid__head { display: none; }
 .pset--tv.pset--n1 .pset__item { flex-direction: row; flex-wrap: wrap; gap: 1.6vh 2vw; }
-.pset--tv.pset--n1 .pgrid { --cell: min(4.4vh, 3vw); }
+.pset--tv.pset--n1 .pgrid { --cell: min(4.4vh, 3vw, max(1vh, (100cqh - 17vh) / 6)); }
 .pset--tv.pset--n1 .pgrid__head { display: grid; }
 .pset--tv.pset--n1 .pset__name { flex: 1 1 4.5em; font-size: 3.6vh; font-weight: 800; font-variation-settings: 'wdth' 112; text-align: left; }
-.pset--tv.pset--n2 .pgrid { --cell: min(3.2vh, 2.2vw); }
-.pset--tv.pset--n3 .pgrid { --cell: min(2.1vh, 1.2vw); }
-.pset--tv.pset--n4 .pgrid { --cell: min(1.8vh, 0.95vw); }
-.pset--tv.pset--n5 .pgrid { --cell: min(1.6vh, 0.85vw); }
+.pset--tv.pset--n2 .pgrid { --cell: min(3.2vh, 2.2vw, max(1vh, (100cqh - 15vh) / 5.5)); }
+.pset--tv.pset--n3 .pgrid { --cell: min(2.1vh, 1.2vw, max(0.8vh, (100cqh - 15vh) / 5.5)); }
+.pset--tv.pset--n4 .pgrid { --cell: min(1.8vh, 0.95vw, max(0.8vh, (100cqh - 22vh) / 11)); }
+.pset--tv.pset--n5 .pgrid { --cell: min(1.6vh, 0.85vw, max(0.8vh, (100cqh - 22vh) / 11)); }
 .pset--tv.pset--n3, .pset--tv.pset--n4, .pset--tv.pset--n5 { gap: 1.6vh 1.2vw; }
 .pset--tv.pset--n3 .pset__item, .pset--tv.pset--n4 .pset__item, .pset--tv.pset--n5 .pset__item { max-width: 8vw; }
 .pset--tv.pset--n3 .pset__name, .pset--tv.pset--n4 .pset__name, .pset--tv.pset--n5 .pset__name { font-size: 1.8vh; }

@@ -3,7 +3,7 @@ import { useEvents, updateEvent } from '../lib/store.js';
 import { variantsFor, activeColumns, callPool, patternName, selectedPatterns, callLimitFor, isMilestone, milestoneText, DEFAULT_PRIZE_MESSAGE, LETTERS } from '../lib/patterns.js';
 import { themeStyle, hasSurface } from '../lib/theme.js';
 import { usePictures } from '../lib/pictures.js';
-import { publishScreen, openDisplayWindow, useWorkerNow } from '../lib/sync.js';
+import { publishScreen, openDisplayWindow, useWorkerNow, useTvCommands } from '../lib/sync.js';
 import { Board, Ball, PatternSet, ColumnChips, fmtClock } from '../components/Bingo.jsx';
 import { announceNumber, say, sayWhenQuiet, isSpeaking, unlockAudio, stopSpeaking, useAudioSettings } from '../lib/voice.js';
 import { falseBingoLines, quipBanks, pickLine, speechMs, DEFAULT_TIEBREAKER_MESSAGE } from '../lib/quips.js';
@@ -12,8 +12,8 @@ import TvHelp from '../components/TvHelp.jsx';
 
 const RUN_KEY = 'bingo.run.v1';
 
-// Special prize: when switched on for the current game and this number is
-// called, calling pauses and the announcement below is read out and shown.
+// Special prize: when switched on for the event and this number is called,
+// calling pauses and the announcement below is read out and shown.
 const PRIZE_NUMBER = 69; // O 69
 const PRIZE_KEY = 'bingo.prize.v1'; // older versions kept the wording per device
 
@@ -95,9 +95,9 @@ function CallerInner({ event }) {
   const limit = isGame && !run.untilBingo ? callLimitFor(item, pool.length, run.extra || 0) : null;
   const limitLifted = isGame && !!run.untilBingo && !!item.callLimit?.enabled;
   const atLimit = limit != null && run.called.length >= limit;
-  // The O 69 prize is only offered when O numbers can be called this game.
+  // The O 69 prize is switched on for the whole event, and applies to every game where O numbers are called.
   const prizeAvailable = isGame && pool.includes(PRIZE_NUMBER);
-  const prizeOn = prizeAvailable && !!run.prizeOn;
+  const prizeOn = prizeAvailable && !!event.prizeOn;
   // The prize wording is saved with the event (set it in setup or here during the game).
   const prizeMessage = (event.prizeMessage ?? '').trim() || legacyPrizeMessage() || DEFAULT_PRIZE_MESSAGE;
   const setPrizeMessage = (text) => updateEvent(event.id, { prizeMessage: text });
@@ -303,7 +303,7 @@ function CallerInner({ event }) {
       return drawNext(r.phase === 'ready' ? { ...r, phase: 'paused', remaining: null } : r);
     });
   };
-  const togglePrize = (on) => setRun((r) => ({ ...r, prizeOn: on }));
+  const togglePrize = (on) => updateEvent(event.id, { prizeOn: on });
   const resumeAfterPrize = () => {
     unlockAudio();
     setRun((r) => ({ ...r, phase: 'calling', nextCallAt: Date.now() + 1500 }));
@@ -347,6 +347,13 @@ function CallerInner({ event }) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Pause and resume from the TV display.
+  useTvCommands((type) => {
+    const k = keyRef.current;
+    if (type === 'pause' && k.phase === 'calling') k.pause();
+    else if (type === 'resume' && k.phase === 'paused') k.resume();
+  });
 
   return (
     <div className="caller">
@@ -475,8 +482,9 @@ function CallerInner({ event }) {
                   {run.phase === 'prize' && <button className="btn btn--primary btn--big" onClick={resumeAfterPrize}>Resume calling</button>}
                   {run.phase === 'limit' && left > 0 && (
                     <>
-                      <button className="btn btn--primary btn--big" onClick={() => addMore(5)}>Add 5 more</button>
-                      <button className="btn btn--big" onClick={() => addMore(10)}>Add 10 more</button>
+                      <button className="btn btn--primary btn--big" onClick={() => addMore(1)}>Add 1 more</button>
+                      <button className="btn btn--big" onClick={() => addMore(3)}>Add 3 more</button>
+                      <button className="btn btn--big" onClick={() => addMore(6)}>Add 6 more</button>
                       <button className="btn btn--big" onClick={keepGoing}>Keep going until a bingo</button>
                     </>
                   )}
@@ -512,7 +520,7 @@ function CallerInner({ event }) {
                     <label className="switch">
                       <input type="checkbox" role="switch" checked={prizeOn} onChange={(e) => togglePrize(e.target.checked)} />
                       <span className="switch__track" aria-hidden />
-                      <span>Special prize on O 69</span>
+                      <span>Special prize on O 69 (whole event)</span>
                     </label>
                     {prizeOn && (
                       <>
@@ -521,7 +529,7 @@ function CallerInner({ event }) {
                           <input value={event.prizeMessage ?? prizeMessage} onChange={(e) => setPrizeMessage(e.target.value)} placeholder={DEFAULT_PRIZE_MESSAGE} />
                         </label>
                         {run.phase !== 'prize' && (
-                          <p className="muted">When O 69 is called, calling pauses and this is read out and shown on the TV.</p>
+                          <p className="muted">When O 69 is called in any game, calling pauses and this is read out and shown on the TV.</p>
                         )}
                       </>
                     )}
@@ -588,8 +596,9 @@ function CallerInner({ event }) {
                     <span className="more__label">{run.phase === 'limit' ? 'Or add' : 'Add more numbers'}</span>
                     {run.phase !== 'limit' && (
                       <>
-                        <button type="button" className="btn btn--quiet" onClick={() => addMore(5)}>+5</button>
-                        <button type="button" className="btn btn--quiet" onClick={() => addMore(10)}>+10</button>
+                        <button type="button" className="btn btn--quiet" onClick={() => addMore(1)}>+1</button>
+                        <button type="button" className="btn btn--quiet" onClick={() => addMore(3)}>+3</button>
+                        <button type="button" className="btn btn--quiet" onClick={() => addMore(6)}>+6</button>
                         <button type="button" className="btn btn--quiet" onClick={keepGoing}>Keep going until a bingo</button>
                       </>
                     )}

@@ -61,6 +61,11 @@ export default function EventEditor({ id }) {
       </header>
 
       <section className="extras" aria-label="Announcements">
+        <label className="switch">
+          <input type="checkbox" role="switch" checked={!!event.prizeOn} onChange={(e) => set({ prizeOn: e.target.checked })} />
+          <span className="switch__track" aria-hidden />
+          <span>Special prize on O 69</span>
+        </label>
         <label className="field">
           <span className="field__label">O 69 prize announcement</span>
           <input
@@ -70,8 +75,8 @@ export default function EventEditor({ id }) {
           />
         </label>
         <p className="muted">
-          Read out and shown on the TV when O 69 is called. Switch the prize on during any game where O numbers are called, from the
-          caller screen. Leave blank to use the wording shown.
+          When the prize is on, calling pauses and this is read out and shown on the TV whenever O 69 is called, in every game where O
+          numbers are called. You can also switch it on or off from the caller screen. Leave blank to use the wording shown.
         </p>
         <label className="field extras__gap">
           <span className="field__label">Closing message</span>

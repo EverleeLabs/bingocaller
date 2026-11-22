@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // The caller publishes a "screen" snapshot; the TV display renders it.
 // Same browser, different window: BroadcastChannel delivers it instantly and
@@ -83,4 +83,48 @@ export function useWorkerNow(ms = 200) {
 export function openDisplayWindow() {
   const url = `${location.origin}${location.pathname}#/display`;
   return window.open(url, 'bingo-display', 'popup,width=1280,height=720');
+}
+
+// The TV can send a few commands back to the caller (pause and resume).
+const COMMAND_CHANNEL = 'bingo-control';
+const COMMAND_KEY = 'bingo.command.v1';
+const commands = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(COMMAND_CHANNEL) : null;
+
+export function sendTvCommand(type) {
+  const msg = { type, id: Math.random().toString(36).slice(2), at: Date.now() };
+  commands?.postMessage(msg);
+  try {
+    localStorage.setItem(COMMAND_KEY, JSON.stringify(msg)); // fallback where BroadcastChannel is missing
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Run `onCommand(type)` for each command the TV sends. Each command is handled once. */
+export function useTvCommands(onCommand) {
+  const handler = useRef(onCommand);
+  handler.current = onCommand;
+  useEffect(() => {
+    const seen = new Set();
+    const handle = (msg) => {
+      if (!msg?.id || seen.has(msg.id) || Date.now() - msg.at > 5000) return;
+      seen.add(msg.id);
+      handler.current(msg.type);
+    };
+    const onMsg = (e) => handle(e.data);
+    const onStorage = (e) => {
+      if (e.key !== COMMAND_KEY) return;
+      try {
+        handle(JSON.parse(e.newValue));
+      } catch {
+        /* ignore */
+      }
+    };
+    commands?.addEventListener('message', onMsg);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      commands?.removeEventListener('message', onMsg);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
 }

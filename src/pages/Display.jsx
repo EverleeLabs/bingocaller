@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useScreen, useNow } from '../lib/sync.js';
+import { useEffect, useRef, useState } from 'react';
+import { useScreen, useNow, sendTvCommand } from '../lib/sync.js';
 import { Board, Ball, PatternSet, Brand, CornerLogo, fmtClock } from '../components/Bingo.jsx';
 import { letterOf } from '../lib/patterns.js';
 import { themeStyle } from '../lib/theme.js';
@@ -18,11 +18,34 @@ export default function Display() {
   // The event's colours (or the current game's own) on every screen.
   const { image, logo } = usePictures(screen?.theme);
 
+  // Pause and resume calling from the TV: the button, or the space bar.
+  const canPause = screen?.kind === 'game' && screen.phase === 'calling';
+  const canResume = screen?.kind === 'game' && screen.phase === 'paused';
+  const togglePause = () => (canPause ? sendTvCommand('pause') : canResume ? sendTvCommand('resume') : null);
+  const toggleRef = useRef(togglePause);
+  toggleRef.current = togglePause;
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code !== 'Space' || e.target.tagName === 'BUTTON' || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      toggleRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className={`tv${idle ? ' is-idle' : ''}${image ? ' has-image' : ''}`} style={screen ? themeStyle(screen.theme, image) : undefined}>
-      <button className="tv__fs" onClick={toggleFullscreen}>
-        {document.fullscreenElement ? 'Exit full screen' : 'Full screen'}
-      </button>
+      <div className="tv__controls">
+        {(canPause || canResume) && (
+          <button className="tv__btn" onClick={togglePause} title="Shortcut: space bar">
+            {canPause ? 'Pause' : 'Resume calling'}
+          </button>
+        )}
+        <button className="tv__btn" onClick={toggleFullscreen}>
+          {document.fullscreenElement ? 'Exit full screen' : 'Full screen'}
+        </button>
+      </div>
       {screen && <CornerLogo logo={logo} theme={screen.theme} />}
       {!screen && <Waiting />}
       {screen?.kind === 'game' && <GameScreen s={screen} logo={logo} now={now} />}
@@ -50,8 +73,9 @@ function Waiting() {
 function GameScreen({ s, logo, now }) {
   const latest = s.called[s.called.length - 1];
   const recent = s.called.slice(-6, -1).reverse();
-  const [fresh, setFresh] = useState(latest);
-  useEffect(() => setFresh(latest), [latest]);
+  const flash = useFlash(s.called.length, latest);
+  // The ball drops into place as the full-screen ball fades away.
+  const holding = flash && !flash.leaving;
 
   return (
     <div className="tv__game">
@@ -68,7 +92,7 @@ function GameScreen({ s, logo, now }) {
       </header>
 
       <section className="tv__left">
-        <div className="tv__ballwrap" key={fresh}>
+        <div className="tv__ballwrap" key={`${latest}:${holding ? 'hold' : 'show'}`}>
           <Ball n={latest} size="xl" />
         </div>
         {s.phase === 'bingo' && <p className="tv__alert">Bingo! Checking the card</p>}
@@ -98,9 +122,11 @@ function GameScreen({ s, logo, now }) {
             ))}
           </div>
         )}
-        <div className={`tv__pattern${(s.patterns || []).length > 1 ? ' is-multi' : ''}`}>
-          <p className="tv__pattern-label">{(s.patterns || []).length > 1 ? 'To win, complete any one' : 'To win'}</p>
-          <PatternSet patterns={s.patterns || []} size="tv" />
+        <div className="tv__patternbox">
+          <div className={`tv__pattern${(s.patterns || []).length > 1 ? ' is-multi' : ''}`}>
+            <p className="tv__pattern-label">{(s.patterns || []).length > 1 ? 'To win, complete any one' : 'To win'}</p>
+            <PatternSet patterns={s.patterns || []} size="tv" />
+          </div>
         </div>
       </section>
 
@@ -109,8 +135,41 @@ function GameScreen({ s, logo, now }) {
       </section>
       {latest && <p className="sr-only" aria-live="polite">{`${letterOf(latest)} ${latest}`}</p>}
       <Shout s={s} now={now} />
+      {flash && (
+        <div className={`tv__flash${flash.leaving ? ' is-leaving' : ''}`} aria-hidden>
+          <Ball n={flash.n} size="xl" />
+        </div>
+      )}
     </div>
   );
+}
+
+const FLASH_MS = 1600; // how long a new number fills the screen
+const FLASH_FADE_MS = 500;
+
+/**
+ * Each newly called number fills the screen on its own for a moment, then
+ * fades to the board. Not shown when the display is first opened or on undo.
+ */
+function useFlash(count, latest) {
+  const prev = useRef(count);
+  const [flash, setFlash] = useState(null);
+  useEffect(() => {
+    const grew = count > prev.current;
+    prev.current = count;
+    if (!grew || !latest) {
+      setFlash(null);
+      return;
+    }
+    setFlash({ n: latest, leaving: false });
+    const t1 = setTimeout(() => setFlash((f) => f && { ...f, leaving: true }), FLASH_MS);
+    const t2 = setTimeout(() => setFlash(null), FLASH_MS + FLASH_FADE_MS);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [count, latest]);
+  return flash;
 }
 
 const SHOUT_LABELS = { reminder: 'Reminder', 'false-bingo': 'Not a bingo' };
